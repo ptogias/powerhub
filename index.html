@@ -1,0 +1,3302 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PowerHub</title>
+<style>
+  :root{
+    --primary:#0f766e;
+    --primary-dark:#0b544e;
+    --primary-light:#ccfbf1;
+    --bg:#f4f6f7;
+    --card:#ffffff;
+    --text:#1f2937;
+    --muted:#6b7280;
+    --border:#e5e7eb;
+    --danger:#dc2626;
+    --danger-light:#fee2e2;
+    --warn:#d97706;
+    --warn-light:#fef3c7;
+    --ok:#16a34a;
+    --ok-light:#dcfce7;
+    --radius:12px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);}
+  #app{display:flex;min-height:100vh;}
+
+  #save-warning{display:none;align-items:center;gap:14px;background:var(--danger);color:#fff;padding:10px 20px;font-size:14px;font-weight:600;position:sticky;top:0;z-index:200;}
+  #save-warning.warn{background:var(--warn);}
+  #save-warning.warn .btn.small{color:var(--warn);}
+  .storage-meter{height:10px;background:var(--border);border-radius:999px;overflow:hidden;margin:8px 0 6px;}
+  .storage-meter > div{height:100%;background:var(--ok);border-radius:999px;}
+  .storage-meter.warn > div{background:var(--warn);}
+  .storage-meter.danger > div{background:var(--danger);}
+  #save-warning-text{flex:1;}
+  #save-warning .btn.small{background:#fff;color:var(--danger);}
+  #save-warning .btn.small:hover{background:#f1f5f9;}
+
+  #notes-reminder{display:none;align-items:center;gap:14px;background:var(--primary);color:#fff;padding:10px 20px;font-size:14px;font-weight:600;}
+  #notes-reminder-text{flex:1;}
+  #notes-reminder .btn.small{background:#fff;color:var(--primary);}
+  #notes-reminder .btn.small:hover{background:#f1f5f9;}
+
+  /* Sidebar */
+  #sidebar{width:220px;background:var(--primary-dark);color:#fff;display:flex;flex-direction:column;padding:20px 0;flex-shrink:0;}
+  #sidebar h1{font-size:18px;padding:0 20px 20px;margin:0;border-bottom:1px solid rgba(255,255,255,.15);}
+  #sidebar nav{display:flex;flex-direction:column;margin-top:10px;}
+  #sidebar button{background:none;border:none;color:#e2e8f0;text-align:left;padding:14px 20px;font-size:15px;cursor:pointer;display:flex;align-items:center;gap:10px;}
+  #sidebar button:hover{background:rgba(255,255,255,.08);}
+  #sidebar button.active{background:var(--primary);color:#fff;font-weight:600;}
+
+  #content{flex:1;padding:24px 28px;max-width:1200px;}
+  h2.page-title{margin:0 0 20px;font-size:24px;}
+
+  .card{background:var(--card);border-radius:var(--radius);padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:18px;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:20px;}
+  .stat{background:var(--card);border-radius:var(--radius);padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+  .stat .num{font-size:28px;font-weight:700;color:var(--primary);}
+  .stat .label{color:var(--muted);font-size:13px;margin-top:4px;}
+
+  button.btn{background:var(--primary);color:#fff;border:none;padding:10px 16px;border-radius:8px;font-size:14px;cursor:pointer;font-weight:600;}
+  button.btn:hover{background:var(--primary-dark);}
+  button.btn.secondary{background:#fff;color:var(--primary);border:1px solid var(--primary);}
+  button.btn.secondary:hover{background:var(--primary-light);}
+  button.btn.danger{background:var(--danger);}
+  button.btn.danger:hover{background:#b91c1c;}
+  button.btn.small{padding:6px 10px;font-size:13px;}
+  button.icon-btn{background:none;border:none;cursor:pointer;font-size:16px;color:var(--muted);padding:4px 8px;}
+  button.icon-btn:hover{color:var(--danger);}
+
+  table{width:100%;border-collapse:collapse;}
+  table th, table td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--border);font-size:14px;}
+  table th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.03em;}
+  table tr:hover td{background:#fafafa;}
+  table tr.month-group-row td{background:var(--primary-light);color:var(--primary-dark);font-weight:700;border-bottom:none;}
+  table tr.month-group-row:hover td{background:var(--primary-light);}
+  table td.indent{padding-left:24px;}
+
+  .table-scroll{max-height:420px;overflow-y:auto;}
+  .table-scroll table thead th{position:sticky;top:0;background:var(--card);}
+
+  .badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;}
+  .badge.ok{background:var(--ok-light);color:var(--ok);}
+  .badge.warn{background:var(--warn-light);color:var(--warn);}
+  .badge.danger{background:var(--danger-light);color:var(--danger);}
+  .badge.muted{background:#f1f5f9;color:var(--muted);}
+  .badge.cat-weights{background:#dbeafe;color:#1d4ed8;}
+  .badge.cat-pilates{background:#fae8ff;color:#a21caf;}
+
+  .cat-filter{display:flex;gap:8px;margin-bottom:14px;}
+
+  input, select, textarea{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;background:#fff;color:var(--text);}
+
+  .autocomplete{position:relative;}
+  .autocomplete-list{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:8px;margin-top:4px;max-height:160px;overflow-y:auto;z-index:50;box-shadow:0 4px 12px rgba(0,0,0,.12);display:none;}
+  .autocomplete-list.open{display:block;}
+  .autocomplete-item{padding:8px 10px;font-size:14px;cursor:pointer;}
+  .autocomplete-item:hover,.autocomplete-item.active{background:var(--primary-light);}
+  .autocomplete-empty{padding:8px 10px;font-size:13px;color:var(--muted);}
+  label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:12px 0 5px;}
+  label:first-child{margin-top:0;}
+  .form-row{display:flex;gap:12px;}
+  .form-row > div{flex:1;}
+
+  /* Native date inputs display in the browser/OS locale format (often MM/DD/YYYY),
+     not the page's language, so we overlay our own DD/MM/YYYY label on top while
+     keeping the real native input (and its calendar picker) fully functional underneath. */
+  .date-field{position:relative;}
+  .date-field input[type="date"]{position:absolute;inset:0;opacity:0;margin:0;padding:0;border:0;cursor:pointer;}
+  .date-field-overlay{padding:9px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;font-size:14px;color:var(--text);display:flex;align-items:center;gap:6px;pointer-events:none;}
+  .date-field-overlay.placeholder{color:var(--muted);}
+  .date-field-overlay .cal-icon{margin-left:auto;opacity:.55;font-size:13px;}
+  .date-field input[type="date"]:focus + .date-field-overlay{outline:2px solid var(--primary);outline-offset:1px;}
+
+  .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:10px;flex-wrap:wrap;}
+  .search{max-width:280px;}
+
+  .empty{color:var(--muted);text-align:center;padding:40px 10px;font-size:14px;}
+
+  /* Modal */
+  #modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);display:none;align-items:center;justify-content:center;z-index:100;padding:20px;}
+  #modal-overlay.open{display:flex;}
+  #modal-box{background:#fff;border-radius:var(--radius);padding:22px 24px;max-width:460px;width:100%;max-height:88vh;overflow-y:auto;}
+  #modal-box h3{margin:0 0 14px;font-size:18px;}
+  .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px;}
+
+  .active-toggle{display:flex;align-items:center;gap:10px;margin-top:10px;}
+  .active-toggle .switch{position:relative;display:inline-block;width:42px;height:24px;flex-shrink:0;}
+  .active-toggle .switch input{opacity:0;width:0;height:0;}
+  .active-toggle .switch .slider{position:absolute;inset:0;background:var(--border);border-radius:999px;cursor:pointer;transition:.15s;}
+  .active-toggle .switch .slider::before{content:"";position:absolute;height:18px;width:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.15s;box-shadow:0 1px 2px rgba(0,0,0,.3);}
+  .active-toggle .switch input:checked + .slider{background:var(--ok);}
+  .active-toggle .switch input:checked + .slider::before{transform:translateX(18px);}
+  .active-toggle .switch-label{font-size:14px;font-weight:600;}
+
+  /* Weekly schedule */
+  .week-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:10px;}
+  .day-col h4{margin:0 0 8px;font-size:14px;text-align:center;color:var(--primary-dark);}
+  .day-col{background:var(--card);border-radius:var(--radius);padding:10px;min-height:120px;}
+  .slot{background:var(--primary-light);border-radius:8px;padding:8px 10px;margin-bottom:8px;cursor:pointer;font-size:13px;}
+  .slot:hover{background:#a7f3ea;}
+  .slot .t{font-weight:700;}
+  .slot .c{color:var(--muted);font-size:12px;}
+  .add-slot-btn{width:100%;background:none;border:1px dashed var(--border);border-radius:8px;padding:8px;color:var(--muted);cursor:pointer;font-size:13px;}
+  .add-slot-btn:hover{background:#f1f5f9;}
+
+  .enrolled-item{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:14px;}
+
+  .roster-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;}
+  .roster-row:last-child{border-bottom:none;}
+  .note-chip{font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--border);border-radius:6px;padding:3px 8px;margin-top:3px;max-width:280px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .note-chip:hover{border-color:var(--primary);color:var(--text);}
+
+  /* Weekly notes page */
+  .scope-seg{display:flex;gap:10px;flex-wrap:wrap;}
+  .scope-option{display:flex;align-items:center;gap:8px;font-weight:500;font-size:14px;color:var(--text);margin:0;padding:9px 14px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:#fff;flex:1;min-width:200px;transition:border-color .15s,background .15s;}
+  .scope-option:hover{border-color:var(--primary);}
+  .scope-option input{width:auto;margin:0;accent-color:var(--primary);}
+  .scope-option.checked{border-color:var(--primary);background:var(--primary-light);}
+  .note-entry{background:#fafbfc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;transition:border-color .15s;}
+  .note-entry:last-child{margin-bottom:0;}
+  .note-entry:hover{border-color:var(--primary);}
+  .note-entry.reviewed{background:transparent;}
+  .note-card.week-current{border-left:4px solid var(--primary);}
+  .status-seg{display:flex;gap:4px;flex-wrap:wrap;}
+  .status-seg button{padding:5px 9px;font-size:12px;border:1px solid var(--border);background:#fff;color:var(--muted);border-radius:6px;cursor:pointer;white-space:nowrap;}
+  .status-seg button:hover{border-color:var(--primary);}
+  .status-seg button.sel-ok{background:var(--ok-light);color:var(--ok);border-color:var(--ok);font-weight:600;}
+  .status-seg button.sel-warn{background:var(--warn-light);color:var(--warn);border-color:var(--warn);font-weight:600;}
+  .status-seg button.sel-danger{background:var(--danger-light);color:var(--danger);border-color:var(--danger);font-weight:600;}
+
+  /* Attendance calendar */
+  .cal-compact{display:flex;align-items:center;gap:10px;}
+  .cal-compact-label{font-weight:700;font-size:14px;cursor:pointer;flex:1;}
+  .cal-header{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .cal-month-label{font-weight:700;font-size:14px;flex:1;text-align:center;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;max-width:420px;margin:0 auto;}
+  .cal-dow{text-align:center;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;padding-bottom:2px;}
+  .cal-cell{border-radius:6px;background:#f8fafc;border:1px solid var(--border);cursor:pointer;padding:3px 4px;display:flex;flex-direction:column;align-items:center;justify-content:center;height:34px;gap:1px;}
+  .cal-cell:hover{border-color:var(--primary);}
+  .cal-cell.cal-empty{background:none;border:none;cursor:default;}
+  .cal-daynum{font-size:12px;font-weight:600;}
+  .cal-count{font-size:9px;font-weight:700;color:var(--primary);background:var(--primary-light);border-radius:5px;padding:0 4px;}
+  .cal-cell.cal-today{border-color:var(--primary);border-width:2px;}
+  .cal-cell.cal-selected{background:var(--primary);border-color:var(--primary);}
+  .cal-cell.cal-selected .cal-daynum{color:#fff;}
+  .cal-cell.cal-selected .cal-count{background:rgba(255,255,255,.25);color:#fff;}
+  .cal-cell.cal-has-att:not(.cal-selected){background:var(--primary-light);}
+
+  .subtle{color:var(--muted);font-size:13px;}
+  .section-title{font-size:15px;font-weight:700;margin:22px 0 10px;}
+  .section-title:first-child{margin-top:0;}
+
+  @media (max-width:900px){
+    #app{flex-direction:column;}
+    #sidebar{width:100%;flex-direction:row;overflow-x:auto;padding:8px;}
+    #sidebar h1{display:none;}
+    #sidebar nav{flex-direction:row;margin-top:0;}
+    #sidebar button{padding:10px 14px;white-space:nowrap;}
+    .week-grid{grid-template-columns:1fr;}
+    #content{padding:16px;}
+    .form-row{flex-direction:column;gap:0;}
+  }
+</style>
+</head>
+<body>
+<div id="save-warning">
+  <span id="save-warning-text"></span>
+  <button class="btn small" onclick="exportData()">⬇ Λήψη Αντιγράφου Τώρα</button>
+  <button class="icon-btn" style="color:#fff;" onclick="dismissSaveWarning()">✕</button>
+</div>
+<div id="notes-reminder">
+  <span id="notes-reminder-text"></span>
+  <button class="btn small" onclick="navigate('notes'); dismissNotesReminder();">Προβολή Σημειώσεων</button>
+  <button class="icon-btn" style="color:#fff;" onclick="dismissNotesReminder()">✕</button>
+</div>
+<div id="app">
+  <div id="sidebar">
+    <h1>🏋️ PowerHub</h1>
+    <nav id="nav"></nav>
+  </div>
+  <div id="content"></div>
+</div>
+
+<div id="modal-overlay">
+  <div id="modal-box"></div>
+</div>
+
+<script>
+/* ---------------- Data layer ---------------- */
+const STORAGE_KEY = 'gymAppData';
+/* Internal day codes stay in English (Mon..Sun) so stored data keeps working;
+   only the on-screen labels are translated via DAY_FULL / DAY_SHORT below. */
+const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const DAY_FULL = {Mon:'Δευτέρα',Tue:'Τρίτη',Wed:'Τετάρτη',Thu:'Πέμπτη',Fri:'Παρασκευή',Sat:'Σάββατο',Sun:'Κυριακή'};
+const DAY_SHORT = {Mon:'Δευ',Tue:'Τρι',Wed:'Τετ',Thu:'Πεμ',Fri:'Παρ',Sat:'Σαβ',Sun:'Κυρ'};
+/* Declared up here (not next to categoryBadge) because normalizeData() needs
+   it while the very first loadData() runs, before the rest of the script. */
+const CLASS_CATEGORIES = ['Βάρη', 'Πιλάτες'];
+
+function defaultData(){ return { members: [], schedule: [], attendance: [], payments: [], notes: [], reviewedNotes: [], employees: [], scheduleOverrides: [] }; }
+
+/* Ids are only ever interpolated into inline onclick="...('${id}')" handlers,
+   so they must never contain quotes or angle brackets. Ids we generate (uid())
+   are always [a-z0-9], but a hand-edited or malicious backup file could smuggle
+   arbitrary strings in — strip anything outside a safe charset. Applied
+   consistently to ids AND the fields that reference them, so references
+   between records survive the cleanup intact. */
+function sanitizeId(v){ return String(v == null ? '' : v).replace(/[^\w-]/g, ''); }
+
+/* Coerces anything parsed from localStorage or an imported backup into the
+   exact shape the app expects. A backup with e.g. members:"hello" used to pass
+   the old typeof check, get SAVED, and then crash every render until the user
+   cleared browser storage — so shape-validate before the data ever replaces
+   the live state. */
+function normalizeData(parsed){
+  const d = defaultData();
+  if(!parsed || typeof parsed !== 'object') return d;
+  Object.keys(d).forEach(key => {
+    if(Array.isArray(parsed[key])){
+      d[key] = parsed[key].filter(x => key === 'reviewedNotes' ? typeof x === 'string' : (x && typeof x === 'object'));
+    }
+  });
+  const validTime = t => /^\d{2}:\d{2}$/.test(String(t));
+  /* Format AND calendar validity: "2026-02-31" matches the pattern but is
+     not a date, and would render as NaN/NaN/NaN everywhere it appears. */
+  const validDate = d => /^\d{4}-\d{2}-\d{2}$/.test(String(d)) && localDateStr(new Date(d + 'T00:00:00')) === d;
+  const validCategory = c => CLASS_CATEGORIES.includes(c);
+  const asStr = v => typeof v === 'string' ? v : (v == null ? '' : String(v));
+  d.members.forEach(m => {
+    m.id = sanitizeId(m.id);
+    /* Free-text fields are escaped at render time, but they must at least BE
+       strings — a backup with e.g. name:{} crashed every page that sorts or
+       searches members. Dates end up inside HTML attributes, so anything not
+       strictly YYYY-MM-DD from a tampered backup is discarded, not rendered. */
+    m.name = asStr(m.name); m.phone = asStr(m.phone); m.email = asStr(m.email); m.notes = asStr(m.notes);
+    if(m.joinDate != null && !validDate(m.joinDate)) m.joinDate = '';
+    /* Generic reusable checkmark — not tied to any specific purpose (handing
+       out flyers, calling members back, etc). The user ticks it for whatever
+       they're currently tracking and clears all of them (clearAllMemberFlags)
+       once that round is done, then reuses it for the next occasion. */
+    m.flagged = m.flagged === true;
+  });
+  /* colorIndex drives each employee's schedule color (see employeeHue()).
+     Employees saved before that feature existed (or a hand-edited backup)
+     have no colorIndex — assign one from load order so every employee gets
+     a stable, well-separated color starting from their very first render,
+     without ever reassigning an index an employee already has. */
+  let nextColorIndex = d.employees.reduce((max, e) => Number.isInteger(e.colorIndex) ? Math.max(max, e.colorIndex + 1) : max, 0);
+  d.employees.forEach(e => {
+    e.id = sanitizeId(e.id);
+    e.name = asStr(e.name);
+    if(e.category != null && !validCategory(e.category)) delete e.category;
+    if(!Number.isInteger(e.colorIndex)) e.colorIndex = nextColorIndex++;
+  });
+  /* Times are interpolated into HTML unescaped (they normally come from
+     <input type="time">), so anything not strictly HH:MM from a tampered
+     backup is discarded here rather than reaching the DOM. */
+  /* A series whose weekday isn't one of Mon..Sun can never occur on any
+     date, and its day code would render as "undefined" — drop it. */
+  d.schedule = d.schedule.filter(s => DAYS.includes(s.day));
+  d.schedule.forEach(s => {
+    s.id = sanitizeId(s.id);
+    s.className = asStr(s.className); s.comments = asStr(s.comments);
+    if(!validCategory(s.category)) s.category = CLASS_CATEGORIES[0];
+    s.memberIds = Array.isArray(s.memberIds) ? s.memberIds.map(sanitizeId) : [];
+    s.capacity = Math.max(1, parseInt(s.capacity) || 1);
+    if(!validTime(s.startTime)) s.startTime = '09:00';
+    if(!validTime(s.endTime)) s.endTime = '10:00';
+    /* A series applies to every occurrence of its weekday with no lower/upper
+       bound unless narrowed — '' sorts before every real YYYY-MM-DD string,
+       so treating a missing/invalid validFrom as '' means "always has
+       applied" (matches how every schedule slot behaved before per-date
+       splitting existed) without needing a sentinel date. */
+    s.validFrom = validDate(s.validFrom) ? s.validFrom : '';
+    s.validUntil = validDate(s.validUntil) ? s.validUntil : null;
+  });
+  /* Overrides are optional patches onto one specific (seriesId, date)
+     occurrence — see occurrenceForSeriesOnDate(). Any field left out (or
+     invalid) simply falls back to the series' own value for that field, so
+     a corrupted override never blanks out a class, just loses that one edit. */
+  d.scheduleOverrides = d.scheduleOverrides.filter(o => validDate(o.date));
+  d.scheduleOverrides.forEach(o => {
+    o.id = sanitizeId(o.id);
+    o.seriesId = sanitizeId(o.seriesId);
+    o.cancelled = o.cancelled === true;
+    if(o.startTime != null && !validTime(o.startTime)) delete o.startTime;
+    if(o.endTime != null && !validTime(o.endTime)) delete o.endTime;
+    if(o.capacity != null) o.capacity = Math.max(1, parseInt(o.capacity) || 1);
+    if(o.className != null) o.className = asStr(o.className);
+    if(o.comments != null) o.comments = asStr(o.comments);
+    if(o.category != null && !validCategory(o.category)) delete o.category;
+    /* Per-date membership deltas: members added to / removed from just this
+       one occurrence (see applyMembershipChange()). Same id hygiene as every
+       other id list. */
+    ['addMemberIds','removeMemberIds'].forEach(k => {
+      if(o[k] != null){
+        if(Array.isArray(o[k])) o[k] = o[k].map(sanitizeId);
+        else delete o[k];
+      }
+    });
+  });
+  /* Every attendance/payment/note is dated, and those dates feed .slice()
+     and HTML directly — a record with a missing or malformed date crashed
+     whole pages after an import (and importData saves before rendering, so
+     the app stayed broken on every reload). Undated records are dropped. */
+  d.attendance = d.attendance.filter(a => validDate(a.date));
+  d.attendance.forEach(a => {
+    a.id = sanitizeId(a.id);
+    a.memberId = sanitizeId(a.memberId);
+    if(a.slotId != null) a.slotId = sanitizeId(a.slotId);
+    if(a.note != null) a.note = asStr(a.note);
+    /* STATUS_META is indexed by status when rendering, so an unknown value
+       crashed the member card. Unknown -> the same default recordStatus()
+       applies to a missing status. */
+    if(a.status != null && !['present','justified','unjustified'].includes(a.status)) delete a.status;
+    if(a.category != null && !validCategory(a.category)) delete a.category;
+  });
+  d.payments = d.payments.filter(p => validDate(p.date));
+  d.payments.forEach(p => {
+    p.id = sanitizeId(p.id);
+    p.memberId = sanitizeId(p.memberId);
+    p.method = asStr(p.method); p.note = asStr(p.note);
+    /* The payment form enforces positive numbers; a backup must too, or a
+       negative amount/classes silently corrupts balances and revenue totals. */
+    p.amount = Math.max(0, Number(p.amount) || 0);
+    p.classes = Math.max(0, parseInt(p.classes) || 0);
+    if(p.category != null && !validCategory(p.category)) delete p.category;
+  });
+  d.notes = d.notes.filter(n => validDate(n.date));
+  d.notes.forEach(n => {
+    n.id = sanitizeId(n.id);
+    n.text = asStr(n.text);
+    n.weekKey = validDate(n.weekKey) ? n.weekKey : mondayOf(n.date);
+    /* A recurring note has no fixed end — it's shown in its origin week and
+       every week after (see notesForWeek()). Notes saved before this feature
+       existed have no `recurring` field; treated as false (one-time, tied
+       only to their weekKey) so nothing changes for existing data. */
+    n.recurring = n.recurring === true;
+    /* Optional tags linking a note to a specific member and/or class series —
+       purely informational (no balances or attendance depend on them), so a
+       stale reference (the member/class was later deleted) is left as-is and
+       just resolved to a "(deleted)" label at render time instead of being
+       stripped out here. */
+    if(n.memberId != null) n.memberId = sanitizeId(n.memberId);
+    if(n.classId != null) n.classId = sanitizeId(n.classId);
+  });
+  /* Each entry is "<noteId>__<weekKey>" — one note's reviewed checkmark for
+     one specific week it appeared in (a recurring note gets a separate
+     checkmark per week, since "read" this week doesn't mean "read" next
+     week too). Same id-hygiene as every other id-bearing field. */
+  d.reviewedNotes = d.reviewedNotes.map(sanitizeId);
+  return d;
+}
+
+/* Size of the last snapshot written to localStorage — see storageUsage().
+   Declared before loadData() runs, which records the loaded size. */
+let lastSavedChars = 0;
+function loadData(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return defaultData();
+    lastSavedChars = raw.length;
+    return normalizeData(JSON.parse(raw));
+  }catch(e){
+    return defaultData();
+  }
+}
+
+let data = loadData();
+
+/* ---------------- Derived-data cache ---------------- */
+/* Rendering recomputes per-member balances and package ledgers many times per
+   page (the payments table used to rebuild a member's ENTIRE ledger once per
+   payment row, which made typing in the payment search lag by whole seconds
+   once a couple of years of data piled up). Everything derived is memoized
+   here and thrown away on any data change — saveData() runs after every
+   mutation, so invalidating there keeps the cache always-correct. */
+let derivedCache = null;
+function derived(){
+  if(!derivedCache){
+    const payByMember = {}, attByMember = {};
+    data.payments.forEach(p => (payByMember[p.memberId] = payByMember[p.memberId] || []).push(p));
+    data.attendance.forEach(a => (attByMember[a.memberId] = attByMember[a.memberId] || []).push(a));
+    derivedCache = { payByMember, attByMember, ledgers: {} };
+  }
+  return derivedCache;
+}
+function invalidateDerived(){ derivedCache = null; }
+/* How many classes each employee has actually taught: one session
+   (a specific series+date) counts only if at least one member was marked
+   PRESENT in it — a class with nobody showing up isn't "done". A single pass
+   over attendance groups records into sessions, then each qualifying session
+   is attributed to whichever employee's name that occurrence's class carried
+   ON THAT DATE (resolved through any per-date schedule override, so a
+   one-off substitute teacher is credited correctly instead of the regular
+   series owner). Memoized on the same cache as everything else derived from
+   data — thrown away by invalidateDerived() on every save. */
+function employeeClassTally(){
+  const cache = derived();
+  if(cache.employeeTally) return cache.employeeTally;
+  const sessions = {};
+  data.attendance.forEach(a => {
+    const key = a.slotId + '|' + a.date;
+    if(!sessions[key]) sessions[key] = { slotId: a.slotId, date: a.date, hasPresent: false };
+    if(isPresentRecord(a)) sessions[key].hasPresent = true;
+  });
+  const tally = {};
+  Object.values(sessions).forEach(s => {
+    if(!s.hasPresent) return;
+    const series = data.schedule.find(x => x.id === s.slotId);
+    if(!series) return;
+    const occ = occurrenceForSeriesOnDate(series, s.date);
+    /* A cancelled occurrence never ran, whatever attendance may linger on it. */
+    if(!occ) return;
+    const className = occ.className;
+    if(!tally[className]) tally[className] = { total: 0, byMonth: {} };
+    tally[className].total++;
+    const month = s.date.slice(0,7);
+    tally[className].byMonth[month] = (tally[className].byMonth[month] || 0) + 1;
+  });
+  cache.employeeTally = tally;
+  return tally;
+}
+
+/* ---------------- Live file-save (File System Access API) ---------------- */
+/* Only Chromium browsers (Chrome/Edge/Opera/Brave) support writing straight to
+   a file on disk without a download prompt. Safari/Firefox have no equivalent
+   API, so on those browsers we just keep the instant localStorage save and
+   tell the person to use manual backups instead. */
+const hasFSAccess = 'showSaveFilePicker' in window;
+let fileHandle = null;
+let fileHandleStatus = 'none'; // 'none' | 'connected' | 'needs-permission'
+
+/* Tracks why the save banner is showing, if at all. Storage issues take
+   priority over file-write issues since losing localStorage is the bigger risk. */
+const saveIssues = { storage: null, space: null, file: null };
+function updateSaveWarning(){
+  const banner = document.getElementById('save-warning');
+  const msg = saveIssues.storage || saveIssues.file || saveIssues.space;
+  /* The "almost full" notice is a heads-up, not a failure — amber, and once
+     dismissed it stays away until usage climbs another 5 percentage points. */
+  const onlySpace = !saveIssues.storage && !saveIssues.file && saveIssues.space;
+  if(msg && !(onlySpace && dismissedSpaceStep === storageUsage().step)){
+    document.getElementById('save-warning-text').textContent = msg;
+    banner.classList.toggle('warn', !!onlySpace);
+    banner.style.display = 'flex';
+  } else {
+    banner.style.display = 'none';
+  }
+}
+let dismissedSpaceStep = null;
+function dismissSaveWarning(){
+  document.getElementById('save-warning').style.display = 'none';
+  if(!saveIssues.storage && !saveIssues.file && saveIssues.space) dismissedSpaceStep = storageUsage().step;
+}
+
+/* ---- Browser storage capacity ---- */
+/* localStorage gives every site a fixed budget (about 5 MB) and when it's
+   full setItem() throws and nothing more is saved. There is no API to ask
+   how much room is left, and browsers count differently: Chrome counts
+   UTF-16 units (~5.2 M characters), Safari counts bytes and stores any
+   string containing a non-Latin character — i.e. every snapshot of this app,
+   since the data is Greek — at 2 bytes per character (~2.6 M characters).
+   So the ceiling is measured once, in THIS browser, with a Greek probe
+   string (binary search on the largest string that still fits), cached, and
+   usage is then tracked as the size of the last saved snapshot against it. */
+const STORAGE_LIMIT_KEY = 'gymAppStorageLimit';
+const STORAGE_WARN_RATIO = 0.75;
+let storageLimitChars = 2500000; // conservative default until probed
+function probeStorageLimit(){
+  try{
+    const cached = parseInt(localStorage.getItem(STORAGE_LIMIT_KEY));
+    if(cached > 0){ storageLimitChars = cached; return; }
+    const used = (localStorage.getItem(STORAGE_KEY) || '').length;
+    let lo = 0, hi = 12000000;
+    while(hi - lo > 20000){
+      const mid = (lo + hi) >> 1;
+      try{ localStorage.setItem('gymAppProbe', 'α'.repeat(mid)); lo = mid; }
+      catch(e){ hi = mid; }
+    }
+    localStorage.removeItem('gymAppProbe');
+    if(lo > 0){ storageLimitChars = used + lo; localStorage.setItem(STORAGE_LIMIT_KEY, String(storageLimitChars)); }
+  }catch(e){ try{ localStorage.removeItem('gymAppProbe'); }catch(_){} }
+}
+function storageUsage(){
+  const pct = Math.min(100, Math.round(lastSavedChars / storageLimitChars * 100));
+  /* Shown in MB of the stored form (2 bytes per character), so the number
+     matches what the browser's own storage settings report. */
+  return { chars: lastSavedChars, mb: (lastSavedChars * 2 / 1048576).toFixed(2), limitMb: (storageLimitChars * 2 / 1048576).toFixed(0), pct, step: Math.floor(pct / 5),
+           level: pct >= 90 ? 'danger' : pct >= STORAGE_WARN_RATIO * 100 ? 'warn' : 'ok' };
+}
+function checkStorageSpace(){
+  const u = storageUsage();
+  saveIssues.space = u.level === 'ok' ? null :
+    `⚠️ Ο αποθηκευτικός χώρος του browser είναι σχεδόν γεμάτος (${u.pct}% — ${u.mb} MB από περίπου ${u.limitMb} MB). Όταν γεμίσει, οι νέες αλλαγές ΔΕΝ θα αποθηκεύονται. Κατεβάστε αντίγραφο ασφαλείας τώρα (καρτέλα Αντίγραφο Ασφαλείας).`;
+}
+
+function saveData(){
+  invalidateDerived();
+  try{
+    const json = JSON.stringify(data);
+    localStorage.setItem(STORAGE_KEY, json);
+    lastSavedChars = json.length;
+    saveIssues.storage = null;
+  }catch(e){
+    console.warn('localStorage save failed:', e);
+    saveIssues.storage = "⚠️ Η τελευταία σας αλλαγή ΔΕΝ αποθηκεύτηκε — ο χώρος αποθήκευσης του browser είναι γεμάτος. Κατεβάστε αντίγραφο ασφαλείας τώρα και μετά ελευθερώστε χώρο ή συνδέστε ένα αρχείο ζωντανής αποθήκευσης (καρτέλα Αντίγραφο Ασφαλείας).";
+  }
+  checkStorageSpace();
+  updateSaveWarning();
+  if(hasFSAccess && fileHandle && fileHandleStatus === 'connected'){
+    writeToFile();
+  }
+}
+
+/* Writes are chained: createWritable() only commits on close(), and two
+   saves in quick succession could otherwise finish out of order, leaving the
+   OLDER snapshot as the file's final content. The chain never rejects —
+   errors are caught (and surfaced via the banner) inside doWriteToFile. */
+let writeChain = Promise.resolve();
+function writeToFile(){
+  writeChain = writeChain.then(doWriteToFile);
+  return writeChain;
+}
+async function doWriteToFile(){
+  try{
+    const writable = await fileHandle.createWritable();
+    await writable.write(JSON.stringify(data, null, 2));
+    await writable.close();
+    saveIssues.file = null;
+  }catch(e){
+    console.warn('Live file save failed:', e);
+    saveIssues.file = "⚠️ Η ζωντανή αποθήκευση στο αρχείο σας απέτυχε. Τα δεδομένα σας εξακολουθούν να είναι αποθηκευμένα σε αυτόν τον browser — μεταβείτε στο Αντίγραφο Ασφαλείας για να επανασυνδέσετε το αρχείο.";
+  }
+  updateSaveWarning();
+}
+
+const HANDLE_DB = 'gymAppFileHandle';
+function openHandleDB(){
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(HANDLE_DB, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('handles');
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function storeHandle(handle){
+  const db = await openHandleDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('handles', 'readwrite');
+    tx.objectStore('handles').put(handle, 'file');
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function getStoredHandle(){
+  const db = await openHandleDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('handles', 'readonly');
+    const req = tx.objectStore('handles').get('file');
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function clearStoredHandle(){
+  const db = await openHandleDB();
+  return new Promise((resolve) => {
+    const tx = db.transaction('handles', 'readwrite');
+    tx.objectStore('handles').delete('file');
+    tx.oncomplete = () => resolve();
+  });
+}
+
+async function initFileHandle(){
+  if(!hasFSAccess) return;
+  try{
+    const stored = await getStoredHandle();
+    if(!stored) return;
+    fileHandle = stored;
+    const perm = await stored.queryPermission({mode:'readwrite'});
+    fileHandleStatus = perm === 'granted' ? 'connected' : 'needs-permission';
+    render();
+  }catch(e){ /* no stored handle, ignore */ }
+}
+
+async function connectFile(){
+  try{
+    const handle = await window.showSaveFilePicker({
+      suggestedName: 'gym-data.json',
+      types: [{ description: 'JSON File', accept: {'application/json': ['.json']} }],
+    });
+    fileHandle = handle;
+    fileHandleStatus = 'connected';
+    await storeHandle(handle);
+    await writeToFile();
+    render();
+  }catch(e){
+    if(e.name !== 'AbortError') alert('Δεν ήταν δυνατή η σύνδεση με αυτό το αρχείο.');
+  }
+}
+async function reconnectFile(){
+  if(!fileHandle) return;
+  try{
+    const perm = await fileHandle.requestPermission({mode:'readwrite'});
+    if(perm === 'granted'){
+      fileHandleStatus = 'connected';
+      await writeToFile();
+    } else {
+      alert('Δεν δόθηκε άδεια, οπότε η ζωντανή αποθήκευση παραμένει σε παύση.');
+    }
+  }catch(e){
+    alert('Δεν ήταν δυνατή η επανασύνδεση με το αρχείο. Δοκιμάστε ξανά «Σύνδεση Αρχείου Αποθήκευσης».');
+  }
+  render();
+}
+async function disconnectFile(){
+  fileHandle = null;
+  fileHandleStatus = 'none';
+  await clearStoredHandle();
+  render();
+}
+
+/* Monotonic counter guarantees uniqueness even when many ids are generated
+   within the same millisecond (bulk imports, sample data). */
+let uidCounter = 0;
+function uid(){ return Date.now().toString(36) + (uidCounter++).toString(36) + Math.random().toString(36).slice(2,7); }
+
+/* ---------------- Date helpers ---------------- */
+function todayStr(){
+  /* Must use the LOCAL calendar date, not toISOString() (which is UTC) —
+     Greece is UTC+2/+3, so for a few hours after local midnight, UTC would
+     still report the previous day, showing yesterday's schedule as "today". */
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function formatDate(d){
+  if(!d) return '—';
+  const dt = new Date(d + 'T00:00:00');
+  const day = String(dt.getDate()).padStart(2,'0');
+  const month = String(dt.getMonth()+1).padStart(2,'0');
+  return `${day}/${month}/${dt.getFullYear()}`;
+}
+function dayAbbrev(dateStr){
+  const map = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  return map[new Date(dateStr+'T00:00:00').getDay()];
+}
+/* Search/filter normalization for Greek text: case-folded, accents (tonos,
+   dialytika) stripped, final sigma folded — so typing "μαρια" finds "Μαρία"
+   and "κωστασ" finds "Κώστας". */
+function searchKey(s){
+  return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ς/g, 'σ');
+}
+function escapeHtml(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* Colors are assigned to employees sequentially (see `colorIndex` on the
+   employee record, assigned in normalizeData()/saveEmployee()) using the
+   golden-angle hue step. Unlike hashing a name to a hue, this GUARANTEES
+   every employee's hue is ~137.5° from the ones assigned right before and
+   after it, regardless of how many employees exist or how similar their
+   names are — a hash can only make collisions unlikely, never impossible,
+   and two employees with similar names (or just bad luck) would eventually
+   land on near-identical hues again as more were added. */
+function employeeHue(colorIndex){ return (Number(colorIndex || 0) * 137.508) % 360; }
+function employeeColor(e){ return `hsl(${employeeHue(e.colorIndex)}, 62%, 38%)`; }
+/* Schedule slots only store the class name as a plain string (see the
+   Employees section below), so to color a slot we look up the employee that
+   currently has that name. A name with no matching employee (the employee
+   was renamed/deleted since, or this is legacy data from before employees
+   existed) falls back to a hash-based hue — no sequencing guarantee, but
+   there's no employee record to sequence it against either. */
+function hashHue(str){
+  let hash = 0;
+  const s = String(str || '');
+  for(let i=0; i<s.length; i++){ hash = (hash*31 + s.charCodeAt(i)) | 0; }
+  let h = Math.imul(hash ^ (hash >>> 16), 2654435761) >>> 0;
+  h = Math.imul(h ^ (h >>> 13), 2246822519) >>> 0;
+  return h % 360;
+}
+function classNameColor(className){
+  const emp = data.employees.find(e => e.name === className);
+  const hue = emp ? employeeHue(emp.colorIndex) : hashHue(className);
+  return `hsl(${hue}, 62%, 38%)`;
+}
+
+function categoryBadge(cat){
+  const c = cat || CLASS_CATEGORIES[0];
+  const cls = c === 'Πιλάτες' ? 'cat-pilates' : 'cat-weights';
+  return `<span class="badge ${cls}">${escapeHtml(c)}</span>`;
+}
+
+/* Native <input type="date"> always displays in the browser/OS locale format
+   (e.g. MM/DD/YYYY on a US-English system) regardless of this page's language,
+   so we overlay a DD/MM/YYYY label on top of the real, fully-functional native
+   input. See syncDateOverlay() for the live update on change. */
+function dateFieldHtml(id, value){
+  const hasValue = !!value;
+  const label = hasValue ? formatDate(value) : 'ΗΗ/ΜΜ/ΕΕΕΕ';
+  return `<div class="date-field">
+    <input type="date" id="${id}" value="${escapeHtml(value||'')}" oninput="syncDateOverlay(this)">
+    <div class="date-field-overlay${hasValue?'':' placeholder'}" id="${id}-overlay"><span id="${id}-overlay-text">${label}</span><span class="cal-icon">📅</span></div>
+  </div>`;
+}
+function syncDateOverlay(input){
+  const overlay = document.getElementById(input.id + '-overlay');
+  const label = document.getElementById(input.id + '-overlay-text');
+  if(!overlay || !label) return;
+  if(input.value){
+    label.textContent = formatDate(input.value);
+    overlay.classList.remove('placeholder');
+  } else {
+    label.textContent = 'ΗΗ/ΜΜ/ΕΕΕΕ';
+    overlay.classList.add('placeholder');
+  }
+}
+
+/* ---------------- Derived / computed helpers ---------------- */
+function memberPayments(memberId){
+  return (derived().payByMember[memberId] || []).slice().sort((a,b)=> a.date < b.date ? 1 : -1);
+}
+function memberAttendance(memberId){
+  return (derived().attByMember[memberId] || []).slice().sort((a,b)=> a.date < b.date ? 1 : -1);
+}
+/* Class credits are tracked per category (Βάρη / Πιλάτες), not as one
+   shared pool: a payment buys N classes of a specific category, and only
+   attendance in a class of that same category draws down that category's
+   balance (see slotCategory() and setClassStatus()/markClassPresent()).
+   Payments or attendance saved before categories existed have no category on
+   them; they're treated as Βάρη so old data isn't silently discarded. */
+function slotCategory(slotId){
+  if(!slotId) return null;
+  const s = data.schedule.find(x => x.id === slotId);
+  return s ? (s.category || CLASS_CATEGORIES[0]) : null;
+}
+/* The category an attendance record consumes a credit in. New records get a
+   category stamped on them at creation time, so a class being deleted or
+   re-categorized later can never silently rewrite history (deleting a slot
+   used to "refund" every credit ever consumed in it). Older records fall back
+   to the live slot lookup, and records with neither (pre-category data, or a
+   long-gone slot) count as Βάρη per the rule above — never dropped. */
+function attendanceCategory(a){
+  return a.category || slotCategory(a.slotId) || CLASS_CATEGORIES[0];
+}
+
+/* Every attendance record belongs to a booked class and carries one of three
+   statuses. Records saved before this feature existed have no status field —
+   they're treated as 'present' so nothing is silently lost or miscounted.
+     present     -> they came; consumes a class credit
+     justified   -> excused absence; spares a credit UNLESS it's the 2nd (4th,
+                    6th, ...) justified absence in that category, which
+                    consumes one — two justified absences together cost the
+                    same as one unjustified no-show
+     unjustified -> unexcused no-show; STILL consumes a class credit */
+const STATUS_META = {
+  present:     { label: 'Παρουσία',              short: '✓ Παρουσία',        cls: 'ok' },
+  justified:   { label: 'Δικαιολογημένη Απουσία', short: 'Δικαιολ. Απουσία', cls: 'warn' },
+  unjustified: { label: 'Αδικαιολόγητη Απουσία',  short: 'Αδικαιολ. Απουσία', cls: 'danger' },
+};
+function recordStatus(a){ return a.status || 'present'; }
+function isPresentRecord(a){ return recordStatus(a) === 'present'; }
+function attendanceRecordFor(memberId, date, slotId){
+  return data.attendance.find(a => a.memberId === memberId && a.date === date && a.slotId === slotId);
+}
+
+/* Every 'present'/'unjustified' record consumes a credit outright; 'justified'
+   ones only consume a credit every 2nd time (chronologically, oldest first),
+   so two justified absences together cost one credit just like a single
+   unjustified no-show. Shared by classesUsed() (a simple count) and
+   memberPackageLedger() (which needs the same records to draw down packages
+   in the same order), so the two never disagree on what "used" means. */
+function consumingAttendanceRecords(memberId, category){
+  const records = (derived().attByMember[memberId] || [])
+    .filter(a => attendanceCategory(a) === category)
+    .slice()
+    .sort((a,b) => a.date < b.date ? -1 : (a.date > b.date ? 1 : 0));
+  let justifiedSeen = 0;
+  return records.filter(a => {
+    if(recordStatus(a) !== 'justified') return true;
+    justifiedSeen++;
+    return justifiedSeen % 2 === 0;
+  });
+}
+function classesPurchased(memberId, category){
+  return (derived().payByMember[memberId] || [])
+    .filter(p => (p.category || CLASS_CATEGORIES[0]) === category)
+    .reduce((s,p)=> s + Number(p.classes || 0), 0);
+}
+function classesUsed(memberId, category){
+  return consumingAttendanceRecords(memberId, category).length;
+}
+function classesRemaining(memberId, category){
+  return classesPurchased(memberId, category) - classesUsed(memberId, category);
+}
+function memberStatus(memberId, category){
+  const purchased = classesPurchased(memberId, category);
+  if(purchased === 0){
+    /* Someone who has attended but never paid owes classes — that is the most
+       urgent "needs attention" case of all, not a neutral "no payment yet". */
+    const used = classesUsed(memberId, category);
+    if(used > 0) return {label: `Απλήρωτ${used===1?'ο':'α'} ${used} μάθημα${used===1?'':'τα'}`, cls:'danger'};
+    return {label:'Καμία πληρωμή', cls:'muted'};
+  }
+  const remaining = classesRemaining(memberId, category);
+  if(remaining < 0) return {label: `Εξαντλήθηκαν τα μαθήματα (${remaining})`, cls:'danger'};
+  if(remaining === 0) return {label:'Εξαντλήθηκαν τα μαθήματα', cls:'danger'};
+  if(remaining === 1) return {label:'1 μάθημα απομένει', cls:'warn'};
+  if(remaining <= 2) return {label: remaining + ' μαθήματα απομένουν', cls:'warn'};
+  return {label: remaining + ' μαθήματα απομένουν', cls:'ok'};
+}
+
+/* ---------------- Package ledger ---------------- */
+/* Each payment is a "package" of N classes. Packages are drawn down oldest-
+   first (FIFO) by actual attendance date, regardless of whether a specific
+   visit happened before or after the payment that ends up covering it — this
+   is what makes "attended day X, paid day X+1" and "paid in advance while an
+   older package still has classes left" both work out correctly and visibly:
+     - A visit with no package to draw from yet (or all packages so far
+       exhausted) is a deficit until a later payment retroactively covers it —
+       at that point the covering package's "active from" date becomes that
+       earlier visit's date, even though it was paid afterward.
+     - A package paid for while an older one still has classes left simply
+       waits in the queue; it has no "active from" date until the older one
+       actually runs out and it starts getting drawn on. We can't predict that
+       calendar date in advance (it depends on how often the person actually
+       shows up) — but once it happens, this recomputes it automatically. */
+function memberPackageLedger(memberId, category){
+  /* Memoized: the payments page asks for the same ledger once per payment row,
+     and rebuilding it from scratch each time made big histories crawl. */
+  const cache = derived();
+  const cacheKey = memberId + '|' + category;
+  if(cache.ledgers[cacheKey]) return cache.ledgers[cacheKey];
+
+  const packages = (cache.payByMember[memberId] || [])
+    .filter(p => (p.category || CLASS_CATEGORIES[0]) === category)
+    .slice()
+    .sort((a,b) => a.date < b.date ? -1 : (a.date > b.date ? 1 : 0))
+    .map(p => ({ payment: p, total: Number(p.classes || 0), remaining: Number(p.classes || 0), firstUsedDate: null }));
+
+  const events = consumingAttendanceRecords(memberId, category);
+
+  let idx = 0;
+  const assignments = [];
+  events.forEach(ev => {
+    while(idx < packages.length && packages[idx].remaining <= 0) idx++;
+    if(idx < packages.length){
+      packages[idx].remaining--;
+      if(!packages[idx].firstUsedDate) packages[idx].firstUsedDate = ev.date;
+      assignments.push({ event: ev, pkg: packages[idx].payment });
+    } else {
+      assignments.push({ event: ev, pkg: null }); // still uncovered by any known payment
+    }
+  });
+
+  const ledger = { packages, assignments };
+  cache.ledgers[cacheKey] = ledger;
+  return ledger;
+}
+/* Returns { state:'active', date } | { state:'pending' } | { state:'unused' } for one payment. */
+function paymentEffectiveInfo(payment){
+  const cat = payment.category || CLASS_CATEGORIES[0];
+  const { packages } = memberPackageLedger(payment.memberId, cat);
+  const i = packages.findIndex(p => p.payment.id === payment.id);
+  if(i === -1) return { state: 'unused' };
+  const pk = packages[i];
+  if(pk.firstUsedDate) return { state: 'active', date: pk.firstUsedDate, backdated: pk.firstUsedDate < payment.date };
+  const pendingBehind = packages.slice(0, i).some(p => p.remaining > 0);
+  return { state: pendingBehind ? 'pending' : 'unused' };
+}
+/* Members saved before the active/inactive feature existed have no `active`
+   field — treated as active so nothing already in storage silently vanishes
+   into the "inactive" bucket. Only an explicit `false` counts as inactive. */
+function isActiveMember(m){ return m.active !== false; }
+function toggleMemberActive(id){
+  const m = data.members.find(x=>x.id===id);
+  if(!m) return;
+  m.active = !isActiveMember(m);
+  saveData();
+  render();
+}
+function toggleMemberFlag(id){
+  const m = data.members.find(x=>x.id===id);
+  if(!m) return;
+  m.flagged = !m.flagged;
+  saveData();
+  render();
+}
+function clearAllMemberFlags(){
+  if(!confirm('Απενεργοποίηση όλων των σημειωμένων μελών;')) return;
+  data.members.forEach(m => m.flagged = false);
+  saveData();
+  render();
+}
+function memberName(id){
+  const m = data.members.find(m => m.id === id);
+  return m ? m.name : '(διαγραμμένο μέλος)';
+}
+function monthLabel(monthStr){
+  const [y, m] = monthStr.split('-').map(Number);
+  return new Date(y, m-1, 1).toLocaleDateString('el-GR', {month:'long', year:'numeric'});
+}
+/* Groups payments by the month they actually became valid/active (not the
+   month they were paid in) — the real month of use, useful for seeing when
+   revenue was actually "earned" rather than just when cash came in. Payments
+   still pending (an older package hasn't run out yet) or paid-but-never-used
+   have no valid month yet, so they're reported separately instead of guessed. */
+function paymentsByValidMonth(){
+  const groups = {};
+  /* Two different reasons a payment isn't in the monthly table yet:
+       pending -> blocked behind an older package that still has classes left
+       unused  -> it IS the active package, nobody has attended from it yet */
+  let pendingCount = 0, pendingAmount = 0;
+  let unusedCount = 0, unusedAmount = 0;
+  data.payments.forEach(p => {
+    const cat = p.category || CLASS_CATEGORIES[0];
+    const info = paymentEffectiveInfo(p);
+    if(info.state === 'pending'){
+      pendingCount++; pendingAmount += Number(p.amount);
+      return;
+    }
+    if(info.state === 'unused'){
+      unusedCount++; unusedAmount += Number(p.amount);
+      return;
+    }
+    const month = info.date.slice(0,7);
+    const key = month + '|' + cat;
+    if(!groups[key]) groups[key] = { month, category: cat, count: 0, amount: 0, classes: 0 };
+    groups[key].count++;
+    groups[key].amount += Number(p.amount);
+    groups[key].classes += Number(p.classes || 0);
+  });
+  const rows = Object.values(groups).sort((a,b) => b.month.localeCompare(a.month) || a.category.localeCompare(b.category));
+  return { rows, pendingCount, pendingAmount, unusedCount, unusedAmount };
+}
+/* Groups payments by the month they were actually PAID in — straightforward
+   cash-received-per-month, unlike paymentsByValidMonth() above which groups
+   by when the package started being used instead. */
+function paymentsByPayMonth(){
+  const groups = {};
+  data.payments.forEach(p => {
+    const cat = p.category || CLASS_CATEGORIES[0];
+    const month = p.date.slice(0,7);
+    const key = month + '|' + cat;
+    if(!groups[key]) groups[key] = { month, category: cat, count: 0, amount: 0, classes: 0 };
+    groups[key].count++;
+    groups[key].amount += Number(p.amount);
+    groups[key].classes += Number(p.classes || 0);
+  });
+  return Object.values(groups).sort((a,b) => b.month.localeCompare(a.month) || a.category.localeCompare(b.category));
+}
+/* "Days attended" everywhere in the app means actual physical presence —
+   absences (justified or not) are excluded from this, even though an
+   unjustified one still costs a class credit. */
+function memberPresentAttendance(memberId){
+  return memberAttendance(memberId).filter(isPresentRecord);
+}
+function memberPresentAttendanceCount(memberId, category){
+  return memberPresentAttendance(memberId).filter(a => attendanceCategory(a) === category).length;
+}
+/* Breaks a day's PRESENT attendance down by class category (absences don't
+   count as "here today"). Every attendance record belongs to a booked class —
+   there's no walk-in concept — but a record from data saved before categories
+   existed (no slotId) is still counted in `total` so nothing goes missing. */
+function attendanceCounts(date){
+  const records = data.attendance.filter(a => a.date === date && isPresentRecord(a));
+  const byCategory = {};
+  CLASS_CATEGORIES.forEach(cat => byCategory[cat] = new Set());
+  records.forEach(a => {
+    const cat = attendanceCategory(a);
+    if(byCategory[cat]) byCategory[cat].add(a.memberId);
+  });
+  const counts = {};
+  CLASS_CATEGORIES.forEach(cat => counts[cat] = byCategory[cat].size);
+  return { byCategory: counts, total: new Set(records.map(r=>r.memberId)).size };
+}
+
+/* ---------------- Navigation ---------------- */
+const views = [
+  {key:'dashboard', label:'📊 Πίνακας Ελέγχου'},
+  {key:'members', label:'👥 Μέλη'},
+  {key:'employees', label:'🧑‍💼 Υπάλληλοι'},
+  {key:'schedule', label:'🗓️ Εβδομαδιαίο Πρόγραμμα'},
+  {key:'attendance', label:'✅ Παρουσίες'},
+  {key:'payments', label:'💳 Πληρωμές'},
+  {key:'notes', label:'📝 Σημειώσεις'},
+  {key:'backup', label:'💾 Αντίγραφο Ασφαλείας'},
+];
+let currentView = 'dashboard';
+let lastRenderedView = null;
+
+function renderNav(){
+  const nav = document.getElementById('nav');
+  nav.innerHTML = views.map(v =>
+    `<button class="${v.key===currentView?'active':''}" onclick="navigate('${v.key}')">${v.label}</button>`
+  ).join('');
+}
+function navigate(view){
+  currentView = view;
+  render();
+}
+function render(){
+  renderNav();
+  const c = document.getElementById('content');
+
+  /* Rebuilding #content via innerHTML (below) destroys and recreates every
+     element in it — including whatever input the user is currently typing
+     in, which silently drops focus and forces a re-click after every single
+     keystroke in any live-search box. Save the focused element's identity
+     and cursor position first, then restore it after the rebuild. */
+  const active = document.activeElement;
+  const hadFocus = active && c.contains(active) && active.id;
+  const focusId = hadFocus ? active.id : null;
+  const selStart = hadFocus && 'selectionStart' in active ? active.selectionStart : null;
+  const selEnd = hadFocus && 'selectionStart' in active ? active.selectionEnd : null;
+
+  /* Same problem as focus above: rebuilding #content also resets the page's
+     scroll position and the scrollTop of every internal scrollable table
+     (.table-scroll), so e.g. ticking a checkbox in a long payments table
+     jumps the view back to the top. Scrollable tables have no stable id, but
+     the same view always renders the same number of them in the same order,
+     so positional matching before/after the rebuild is reliable. */
+  /* ...but only when re-rendering the SAME view. Switching pages should
+     land at the top, not at wherever the previous page was scrolled to. */
+  const sameView = lastRenderedView === currentView;
+  const winScroll = sameView ? window.scrollY : 0;
+  const tableScrollTops = sameView ? Array.from(c.querySelectorAll('.table-scroll')).map(el => el.scrollTop) : [];
+  lastRenderedView = currentView;
+
+  if(currentView==='dashboard') c.innerHTML = renderDashboard();
+  else if(currentView==='members') c.innerHTML = renderMembers();
+  else if(currentView==='employees') c.innerHTML = renderEmployees();
+  else if(currentView==='schedule') c.innerHTML = renderSchedule();
+  else if(currentView==='attendance') c.innerHTML = renderAttendance();
+  else if(currentView==='payments') c.innerHTML = renderPayments();
+  else if(currentView==='notes') c.innerHTML = renderNotes();
+  else if(currentView==='backup') c.innerHTML = renderBackup();
+  checkNotesReminder();
+
+  window.scrollTo(0, winScroll);
+  c.querySelectorAll('.table-scroll').forEach((el, i) => { if(tableScrollTops[i] != null) el.scrollTop = tableScrollTops[i]; });
+
+  if(focusId){
+    const restored = document.getElementById(focusId);
+    if(restored){
+      restored.focus();
+      if(selStart !== null && 'setSelectionRange' in restored){
+        try{ restored.setSelectionRange(selStart, selEnd); }catch(e){ /* not a text-selectable input type */ }
+      }
+    }
+  }
+}
+
+/* ---------------- Modal ---------------- */
+function openModal(html){
+  document.getElementById('modal-box').innerHTML = html;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+function closeModal(){
+  document.getElementById('modal-overlay').classList.remove('open');
+  document.getElementById('modal-box').innerHTML = '';
+}
+document.getElementById('modal-overlay').addEventListener('click', e => {
+  if(e.target.id === 'modal-overlay') closeModal();
+});
+document.addEventListener('keydown', e => {
+  if(e.key !== 'Escape') return;
+  /* An open autocomplete list claims Escape for itself (see acKeydown, which
+     stops propagation), so this only ever closes the modal. */
+  if(document.getElementById('modal-overlay').classList.contains('open')) closeModal();
+});
+
+/* ---------------- Member autocomplete ---------------- */
+/* A plain <select> gets unwieldy once a gym has more than a couple dozen
+   members — no search box, just scrolling an alphabetical list. This is a
+   small reusable text-autocomplete: a visible text input plus a hidden input
+   holding the actual selected member id at the SAME id a <select> would have
+   used, so every existing call site (document.getElementById(id).value)
+   keeps working unchanged. Options for each field are kept in
+   `autocompleteOptions`/`autocompleteMatches` keyed by field id. */
+let autocompleteOptions = {};
+let autocompleteMatches = {};
+let autocompleteActiveIndex = {};
+function memberAutocompleteHtml(id, members, selectedId, placeholder){
+  const sorted = members.slice().sort((a,b)=>a.name.localeCompare(b.name,'el'));
+  autocompleteOptions[id] = sorted.map(m => ({ id: m.id, name: m.name }));
+  const selected = sorted.find(m => m.id === selectedId);
+  return `
+    <div class="autocomplete">
+      <input type="text" id="${id}-input" autocomplete="off" placeholder="${escapeHtml(placeholder||'Αναζήτηση μέλους...')}" value="${escapeHtml(selected?.name||'')}"
+        oninput="acFilter('${id}')" onfocus="acFilter('${id}')" onkeydown="acKeydown(event,'${id}')" onblur="acClose('${id}')">
+      <input type="hidden" id="${id}" value="${selected ? selected.id : ''}">
+      <div class="autocomplete-list" id="${id}-list"></div>
+    </div>
+  `;
+}
+function acFilter(id){
+  const input = document.getElementById(id+'-input');
+  const list = document.getElementById(id+'-list');
+  if(!input || !list) return;
+  const q = input.value.trim().toLowerCase();
+  const options = autocompleteOptions[id] || [];
+  /* The hidden id must never outlive the text it was chosen for: once the
+     person edits the box so it no longer reads the selected member's name,
+     drop the selection immediately. Otherwise a fast click on Save (which
+     fires before acClose's blur timer) would submit the OLD member while the
+     box visibly showed a different name. */
+  const hidden = document.getElementById(id);
+  if(hidden && hidden.value){
+    const current = options.find(o => o.id === hidden.value);
+    if(!current || current.name !== input.value) hidden.value = '';
+  }
+  const qk = searchKey(q);
+  const matches = (qk ? options.filter(o=>searchKey(o.name).includes(qk)) : options).slice(0,5);
+  autocompleteMatches[id] = matches;
+  autocompleteActiveIndex[id] = -1;
+  list.innerHTML = matches.length===0
+    ? '<div class="autocomplete-empty">Δεν βρέθηκαν μέλη.</div>'
+    : matches.map((m,i)=>`<div class="autocomplete-item" data-idx="${i}" onmousedown="acSelect('${id}','${m.id}')">${escapeHtml(m.name)}</div>`).join('');
+  list.classList.add('open');
+  /* The list is an absolutely-positioned child of #modal-box, which itself
+     scrolls (overflow-y:auto) — a modal-box ancestor with overflow clips any
+     absolutely-positioned descendant that extends past its own visible
+     scroll area, so a dropdown opened near the bottom of a tall modal (e.g.
+     the "add member" field in the class detail modal, below a long roster)
+     could get cut off. Scrolling the input to the nearest edge of the modal
+     first keeps the freshly-opened list inside the visible area. */
+  input.scrollIntoView({block:'nearest'});
+}
+function acSelect(id, memberId){
+  const opt = (autocompleteOptions[id]||[]).find(o=>o.id===memberId);
+  if(!opt) return;
+  document.getElementById(id).value = opt.id;
+  document.getElementById(id+'-input').value = opt.name;
+  document.getElementById(id+'-list').classList.remove('open');
+}
+function acHighlight(id){
+  const list = document.getElementById(id+'-list');
+  if(!list) return;
+  Array.from(list.children).forEach((el,i)=> el.classList.toggle('active', i===autocompleteActiveIndex[id]));
+}
+function acKeydown(event, id){
+  const list = document.getElementById(id+'-list');
+  if(!list || !list.classList.contains('open')) return;
+  const matches = autocompleteMatches[id] || [];
+  if(event.key === 'ArrowDown'){
+    event.preventDefault();
+    autocompleteActiveIndex[id] = Math.min((autocompleteActiveIndex[id] ?? -1) + 1, matches.length-1);
+    acHighlight(id);
+  } else if(event.key === 'ArrowUp'){
+    event.preventDefault();
+    autocompleteActiveIndex[id] = Math.max((autocompleteActiveIndex[id] ?? 0) - 1, 0);
+    acHighlight(id);
+  } else if(event.key === 'Enter'){
+    event.preventDefault();
+    /* Never guess: Enter confirms a highlighted row, or the only remaining
+       match. With several matches and nothing highlighted it does nothing —
+       silently picking the first of three "Μαρία"s booked the wrong person. */
+    const idx = autocompleteActiveIndex[id] ?? -1;
+    const pick = matches[idx] || (matches.length === 1 ? matches[0] : null);
+    if(pick) acSelect(id, pick.id);
+  } else if(event.key === 'Escape'){
+    event.stopPropagation();
+    list.classList.remove('open');
+  }
+}
+/* Runs on blur, delayed so a mousedown-selection on a list item (which fires
+   before blur) has already completed. Also snaps the visible text back in
+   sync with whatever's actually selected — if the person typed something
+   and clicked away without picking a match, both the hidden value and the
+   displayed text are cleared rather than left in a mismatched state. */
+function acClose(id){
+  setTimeout(() => {
+    const list = document.getElementById(id+'-list');
+    if(list) list.classList.remove('open');
+    const hidden = document.getElementById(id);
+    const input = document.getElementById(id+'-input');
+    if(!hidden || !input) return;
+    const opt = (autocompleteOptions[id]||[]).find(o=>o.id===hidden.value);
+    input.value = opt ? opt.name : '';
+    if(!opt) hidden.value = '';
+  }, 150);
+}
+
+/* ---------------- Dashboard ---------------- */
+function renderNeedsAttentionCard(){
+  /* One merged, actionable list instead of four small name-only lists: every
+     member who is low-on or out-of classes in either category, one row per
+     (member, category) they need attention in, sorted worst-first so the
+     people who need a renewal call most urgently are at the top. */
+  const rows = [];
+  CLASS_CATEGORIES.forEach(cat => {
+    data.members.forEach(m => {
+      const st = memberStatus(m.id, cat);
+      if(st.cls === 'warn' || st.cls === 'danger'){
+        const lastAttended = memberAttendance(m.id).find(a => attendanceCategory(a) === cat && isPresentRecord(a))?.date;
+        rows.push({ m, cat, st, remaining: classesRemaining(m.id, cat), lastAttended });
+      }
+    });
+  });
+  rows.sort((a,b) => a.remaining - b.remaining);
+  const uniqueMembers = new Set(rows.map(r => r.m.id)).size;
+
+  return { count: uniqueMembers, html: `
+    <div class="card">
+      <div class="section-title">Χρειάζονται Προσοχή (χαμηλό υπόλοιπο ή χωρίς μαθήματα)</div>
+      ${rows.length===0 ? '<div class="empty">Όλοι έχουν αρκετά μαθήματα. 🎉</div>' :
+      `<div class="table-scroll"><table>
+        <thead><tr><th>Όνομα</th><th>Τηλέφωνο</th><th>Κατηγορία</th><th>Υπόλοιπο</th><th>Κατάσταση</th><th>Τελ. Παρουσία</th><th></th></tr></thead>
+        <tbody>
+          ${rows.map(r=>`<tr>
+            <td><a href="#" onclick="viewMember('${r.m.id}');return false;">${escapeHtml(r.m.name)}</a></td>
+            <td>${escapeHtml(r.m.phone||'—')}</td>
+            <td>${categoryBadge(r.cat)}</td>
+            <td>${r.remaining}</td>
+            <td><span class="badge ${r.st.cls}">${r.st.label}</span></td>
+            <td>${r.lastAttended ? formatDate(r.lastAttended) : '—'}</td>
+            <td><button class="btn small" onclick="openPaymentForm('${r.m.id}')">+ Πληρωμή</button></td>
+          </tr>`).join('')}
+        </tbody>
+      </table></div>`}
+    </div>
+  `};
+}
+function renderDashboard(){
+  const total = data.members.length;
+  const today = todayStr();
+  const todayCounts = attendanceCounts(today);
+
+  const todayAbbrev = dayAbbrev(today);
+  const todaysClasses = occurrencesForDate(today);
+
+  const attention = renderNeedsAttentionCard();
+
+  return `
+    <h2 class="page-title">Πίνακας Ελέγχου</h2>
+    <div class="grid">
+      <div class="stat"><div class="num">${total}</div><div class="label">Σύνολο Μελών</div></div>
+      ${CLASS_CATEGORIES.map(cat=>`<div class="stat"><div class="num">${todayCounts.byCategory[cat]}</div><div class="label">Παρουσίες Σήμερα (${cat})</div></div>`).join('')}
+      <div class="stat"><div class="num">${attention.count}</div><div class="label">Χρειάζονται Προσοχή</div></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Σημερινά Μαθήματα (${DAY_FULL[todayAbbrev]})</div>
+      ${todaysClasses.length===0 ? '<div class="empty">Δεν υπάρχουν προγραμματισμένα μαθήματα σήμερα.</div>' :
+        `<table><thead><tr><th>Ώρα</th><th>Μάθημα</th><th>Κατηγορία</th><th>Θέσεις</th></tr></thead><tbody>
+          ${todaysClasses.map(s=>`<tr style="cursor:pointer;" onclick="viewOccurrence('${s.seriesId}','${today}')">
+            <td>${s.startTime}–${s.endTime}</td>
+            <td><span style="color:${classNameColor(s.className)};">${escapeHtml(s.className)}</span>${s.comments?' 💬':''}${s.hasOverride?' ✱':''}</td>
+            <td>${categoryBadge(s.category)}</td>
+            <td>${s.memberIds.length}/${s.capacity}</td>
+          </tr>`).join('')}
+        </tbody></table>`}
+    </div>
+
+    ${attention.html}
+  `;
+}
+
+/* ---------------- Members ---------------- */
+let memberSearch = '';
+function renderMemberTable(list){
+  if(list.length===0) return '<div class="empty">Κανένα μέλος.</div>';
+  return `<div class="table-scroll"><table>
+    <thead><tr><th title="Σημείωση για ό,τι χρειάζεστε (π.χ. ποιοι έχουν ενημερωθεί)">✓</th><th>Όνομα</th><th>Τηλέφωνο</th>${CLASS_CATEGORIES.map(c=>`<th>${c}</th>`).join('')}${CLASS_CATEGORIES.map(c=>`<th>Παρουσίες (${c})</th>`).join('')}<th>Εγγραφή</th><th></th></tr></thead>
+    <tbody>
+      ${list.map(m=>{
+        return `<tr>
+          <td style="text-align:center;"><input type="checkbox" style="width:auto;" ${m.flagged?'checked':''} onchange="toggleMemberFlag('${m.id}')" title="Σημείωση"></td>
+          <td><a href="#" onclick="viewMember('${m.id}');return false;">${escapeHtml(m.name)}</a></td>
+          <td>${escapeHtml(m.phone||'—')}</td>
+          ${CLASS_CATEGORIES.map(cat=>{
+            const st = memberStatus(m.id, cat);
+            return `<td><span class="badge ${st.cls}">${st.label}</span></td>`;
+          }).join('')}
+          ${CLASS_CATEGORIES.map(cat=>`<td>${memberPresentAttendanceCount(m.id, cat)}</td>`).join('')}
+          <td>${formatDate(m.joinDate)}</td>
+          <td><button class="icon-btn" onclick="viewMember('${m.id}')">⋯</button></td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table></div>`;
+}
+function renderMembers(){
+  const filtered = data.members
+    .filter(m => searchKey(m.name).includes(searchKey(memberSearch)))
+    .sort((a,b)=> a.name.localeCompare(b.name, 'el'));
+  const activeList = filtered.filter(isActiveMember);
+  const inactiveList = filtered.filter(m => !isActiveMember(m));
+
+  const flaggedCount = filtered.filter(m => m.flagged).length;
+  return `
+    <h2 class="page-title">Μέλη</h2>
+    <div class="toolbar">
+      <input class="search" id="member-search-input" placeholder="Αναζήτηση μελών..." value="${escapeHtml(memberSearch)}" oninput="memberSearch=this.value; render();">
+      <div style="display:flex;gap:10px;align-items:center;">
+        ${flaggedCount>0 ? `<span class="subtle">${flaggedCount} σημειωμέν${flaggedCount===1?'ο':'α'}</span><button class="btn secondary small" onclick="clearAllMemberFlags()">Καθαρισμός Σημειώσεων</button>` : ''}
+        <button class="btn" onclick="openMemberForm()">+ Προσθήκη Μέλους</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section-title">Ενεργά Μέλη (${activeList.length})</div>
+      ${filtered.length===0 ? '<div class="empty">Δεν υπάρχουν μέλη ακόμα. Πατήστε «Προσθήκη Μέλους» για να ξεκινήσετε.</div>' : renderMemberTable(activeList)}
+    </div>
+    <div class="card">
+      <div class="section-title">Ανενεργά Μέλη (${inactiveList.length})</div>
+      ${renderMemberTable(inactiveList)}
+    </div>
+    <div class="subtle">${filtered.length} μέλ${filtered.length===1?'ος':'η'}</div>
+  `;
+}
+
+function openMemberForm(id){
+  const m = id ? data.members.find(x=>x.id===id) : null;
+  openModal(`
+    <h3>${m ? 'Επεξεργασία Μέλους' : 'Προσθήκη Μέλους'}</h3>
+    <label>Ονοματεπώνυμο</label>
+    <input id="f-name" value="${escapeHtml(m?.name||'')}" placeholder="Μαρία Παπαδοπούλου">
+    <label>Τηλέφωνο</label>
+    <input id="f-phone" value="${escapeHtml(m?.phone||'')}" placeholder="6912345678">
+    <label>Email</label>
+    <input id="f-email" value="${escapeHtml(m?.email||'')}" placeholder="maria@example.com">
+    <label>Ημερομηνία Εγγραφής</label>
+    ${dateFieldHtml('f-join', m?.joinDate || todayStr())}
+    <label>Σημειώσεις</label>
+    <textarea id="f-notes" rows="2">${escapeHtml(m?.notes||'')}</textarea>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Ακύρωση</button>
+      <button class="btn" onclick="saveMember(${m?`'${m.id}'`:'null'})">Αποθήκευση</button>
+    </div>
+  `);
+}
+function saveMember(id){
+  const name = document.getElementById('f-name').value.trim();
+  if(!name){ alert('Παρακαλώ εισάγετε ένα όνομα.'); return; }
+  const rec = {
+    name,
+    phone: document.getElementById('f-phone').value.trim(),
+    email: document.getElementById('f-email').value.trim(),
+    joinDate: document.getElementById('f-join').value || todayStr(),
+    notes: document.getElementById('f-notes').value.trim(),
+  };
+  if(id){
+    Object.assign(data.members.find(m=>m.id===id), rec);
+  } else {
+    rec.id = uid();
+    data.members.push(rec);
+  }
+  saveData();
+  closeModal();
+  render();
+}
+function deleteMember(id){
+  if(!confirm('Διαγραφή αυτού του μέλους και όλου του ιστορικού παρουσιών/πληρωμών; Αυτό δεν μπορεί να αναιρεθεί.')) return;
+  data.members = data.members.filter(m=>m.id!==id);
+  data.attendance = data.attendance.filter(a=>a.memberId!==id);
+  data.payments = data.payments.filter(p=>p.memberId!==id);
+  data.schedule.forEach(s => s.memberIds = s.memberIds.filter(mid=>mid!==id));
+  /* Per-date membership deltas reference members too — a stale id left in
+     addMemberIds kept occupying a seat in that date's capacity, and
+     markClassPresent() then created attendance for a member that no longer
+     existed. Overrides left with nothing meaningful are dropped entirely. */
+  data.scheduleOverrides.slice().forEach(o => {
+    if(o.addMemberIds) o.addMemberIds = o.addMemberIds.filter(mid=>mid!==id);
+    if(o.removeMemberIds) o.removeMemberIds = o.removeMemberIds.filter(mid=>mid!==id);
+    cleanupOverride(o);
+  });
+  saveData();
+  closeModal();
+  render();
+}
+function packageEffectLabel(info){
+  if(info.state === 'active') return `Ισχύει από: ${formatDate(info.date)}${info.backdated ? ' (πριν την πληρωμή)' : ''}`;
+  if(info.state === 'pending') return 'Εκκρεμεί — θα ενεργοποιηθεί μόλις εξαντληθεί το προηγούμενο πακέτο';
+  return 'Ενεργό — δεν έχει χρησιμοποιηθεί ακόμα';
+}
+function viewMember(id){
+  const m = data.members.find(x=>x.id===id);
+  if(!m) return;
+  const att = memberAttendance(id);
+  const active = isActiveMember(m);
+  openModal(`
+    <h3>${escapeHtml(m.name)}</h3>
+    <div class="subtle">${escapeHtml(m.phone||'')} ${m.phone&&m.email?'·':''} ${escapeHtml(m.email||'')}</div>
+    <div class="active-toggle">
+      <label class="switch">
+        <input type="checkbox" ${active?'checked':''} onchange="toggleMemberActive('${m.id}'); viewMember('${m.id}');">
+        <span class="slider"></span>
+      </label>
+      <span class="switch-label">${active?'Ενεργό Μέλος':'Ανενεργό Μέλος'}</span>
+    </div>
+    <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      ${CLASS_CATEGORIES.map(cat=>{
+        const st = memberStatus(id, cat);
+        return `<span class="badge ${st.cls}">${escapeHtml(cat)}: ${st.label}</span>`;
+      }).join('')}
+    </div>
+    ${m.notes ? `<div class="subtle" style="margin-top:8px;">${escapeHtml(m.notes)}</div>` : ''}
+
+    <div class="section-title">Μαθήματα</div>
+    ${renderMemberClassSection(m)}
+
+    <div class="section-title">Παρουσίες (${att.filter(isPresentRecord).length} ημέρες)</div>
+    ${att.length===0 ? '<div class="subtle">Καμία παρουσία ακόμα.</div>' :
+      `<div style="max-height:160px;overflow-y:auto;">${att.slice(0,15).map(a=>{
+        const meta = STATUS_META[recordStatus(a)];
+        return `<div class="enrolled-item" style="flex-direction:column;align-items:flex-start;gap:2px;">
+          <span>${formatDate(a.date)} ${categoryBadge(attendanceCategory(a))} <span class="badge ${meta.cls}">${meta.label}</span></span>
+          ${a.note?`<span class="note-chip" style="cursor:default;white-space:normal;max-width:100%;">💬 ${escapeHtml(a.note)}</span>`:''}
+        </div>`;
+      }).join('')}</div>
+       ${att.length>15?`<div class="subtle">+ ${att.length-15} ακόμα</div>`:''}`}
+
+    <div class="section-title">Πακέτα Μαθημάτων</div>
+    <div class="subtle" style="margin-bottom:8px;">Κάθε πληρωμή είναι ένα «πακέτο» μαθημάτων. Χρησιμοποιούνται με τη σειρά (το παλιότερο πρώτο) — το «Ισχύει από» δείχνει την πραγματική ημέρα που άρχισε να χρησιμοποιείται κάθε πακέτο, με βάση τις πραγματικές παρουσίες.</div>
+    ${CLASS_CATEGORIES.map(cat => {
+      const { packages } = memberPackageLedger(id, cat);
+      if(packages.length===0) return '';
+      return `
+        <div class="subtle" style="font-weight:700;margin:8px 0 4px;">${categoryBadge(cat)}</div>
+        <div style="max-height:160px;overflow-y:auto;">
+          ${packages.map(pk => {
+            const used = pk.total - pk.remaining;
+            const info = paymentEffectiveInfo(pk.payment);
+            return `<div class="enrolled-item" style="flex-direction:column;align-items:flex-start;gap:2px;">
+              <span><strong>${formatDate(pk.payment.date)}</strong> — €${Number(pk.payment.amount).toFixed(2)} · ${pk.total} μαθήματα · ${escapeHtml(pk.payment.method)}</span>
+              <span class="subtle">Χρησιμοποιήθηκαν: ${used}/${pk.total} · Υπόλοιπο: ${pk.remaining}</span>
+              <span class="subtle">${packageEffectLabel(info)}</span>
+              ${pk.payment.note ? `<span class="subtle">📝 ${escapeHtml(pk.payment.note)}</span>` : ''}
+            </div>`;
+          }).join('')}
+        </div>
+      `;
+    }).join('') || '<div class="subtle">Δεν έχουν καταγραφεί πληρωμές.</div>'}
+
+    <div class="modal-actions">
+      <button class="btn danger" onclick="deleteMember('${m.id}')">Διαγραφή</button>
+      <button class="btn secondary" onclick="openMemberForm('${m.id}')">Επεξεργασία</button>
+      <button class="btn secondary" onclick="closeModal()">Κλείσιμο</button>
+    </div>
+  `);
+}
+function renderMemberClassSection(m){
+  const today = todayStr();
+  /* Ended segments (validUntil in the past, left behind by "this and
+     following" splits) are history, not current enrollment — without this
+     filter a member showed up "enrolled" in the same class once per split.
+     Among the still-valid segments, a split class can appear several times
+     with identical day/time/name — show it once, represented by the segment
+     that's active soonest (so the ✕ scope prompt anchors to the very next
+     occurrence). */
+  const seenClass = {};
+  const enrolled = data.schedule.filter(s => s.memberIds.includes(m.id) && (!s.validUntil || s.validUntil >= today))
+    .sort((a,b)=> (a.validFrom||'') < (b.validFrom||'') ? -1 : 1)
+    .filter(s => {
+      const k = [s.day, s.startTime, s.endTime, s.className, s.category].join('|');
+      if(seenClass[k]) return false;
+      seenClass[k] = true;
+      return true;
+    })
+    .sort((a,b)=> DAYS.indexOf(a.day)-DAYS.indexOf(b.day) || (a.startTime<b.startTime?-1:1));
+  /* Only offer series that are still currently active (not ended by a
+     "this and following" split/delete) — enrolling into a series that has
+     already stopped recurring would silently do nothing going forward. */
+  const available = data.schedule.filter(s => !s.memberIds.includes(m.id) && s.memberIds.length < s.capacity && seriesActiveOn(s, today))
+    .sort((a,b)=> DAYS.indexOf(a.day)-DAYS.indexOf(b.day) || (a.startTime<b.startTime?-1:1));
+  /* Upcoming one-date membership changes for this member: an extra visit
+     booked into a single occurrence, or a "won't come that day" exception.
+     Past deltas are history and stay off the card. */
+  const deltas = [];
+  data.scheduleOverrides.forEach(o => {
+    if(o.date < today || o.cancelled) return;
+    const isAdd = (o.addMemberIds||[]).includes(m.id);
+    const isRemove = (o.removeMemberIds||[]).includes(m.id);
+    if(!isAdd && !isRemove) return;
+    const series = data.schedule.find(s=>s.id===o.seriesId);
+    if(!series) return;
+    const occ = occurrenceForSeriesOnDate(series, o.date);
+    if(!occ) return;
+    deltas.push({ date: o.date, seriesId: o.seriesId, occ, isAdd });
+  });
+  deltas.sort((a,b)=> a.date < b.date ? -1 : 1);
+  return `
+    ${enrolled.length===0 ? '<div class="subtle">Δεν έχει κλείσει θέση σε κανένα μάθημα.</div>' :
+      enrolled.map(s=>`<div class="enrolled-item"><span>${DAY_SHORT[s.day]} ${s.startTime}–${s.endTime} — ${escapeHtml(s.className)} ${categoryBadge(s.category)}</span><button class="icon-btn" onclick="removeMemberFromClass('${m.id}','${s.id}')">✕</button></div>`).join('')}
+    ${deltas.length===0 ? '' : `
+      <div class="subtle" style="font-weight:700;margin-top:10px;">Αλλαγές μίας ημερομηνίας</div>
+      ${deltas.map(d=>`<div class="enrolled-item"><span>${formatDate(d.date)} · ${d.occ.startTime}–${d.occ.endTime} — ${escapeHtml(d.occ.className)} <span class="badge ${d.isAdd?'ok':'warn'}">${d.isAdd?'έξτρα συμμετοχή':'δεν θα έρθει'}</span></span><button class="icon-btn" title="Αναίρεση" onclick="undoMembershipDelta('${m.id}','${d.seriesId}','${d.date}')">↩</button></div>`).join('')}
+    `}
+    ${available.length===0 ? '' :
+      `<div class="form-row" style="align-items:flex-end;margin-top:8px;">
+        <div><select id="f-member-add-slot">${available.map(s=>`<option value="${s.id}">${DAY_SHORT[s.day]} ${s.startTime}–${s.endTime} — ${escapeHtml(s.className)} (${escapeHtml(s.category)})</option>`).join('')}</select></div>
+        <div style="flex:0 0 auto;"><button class="btn small" onclick="addMemberToClass('${m.id}')">Προσθήκη</button></div>
+      </div>`}
+  `;
+}
+/* The next real calendar date this series occurs on — the reference date the
+   member card's scope prompt anchors to ("skip just next Monday"). 28 days
+   covers any validFrom/validUntil window that still has a future occurrence. */
+function nextOccurrenceDateFor(series){
+  const today = todayStr();
+  for(let i=0;i<28;i++){
+    const d = addDaysLocalStr(today, i);
+    if(dayAbbrev(d)===series.day && seriesActiveOn(series, d)) return d;
+  }
+  return null;
+}
+function addMemberToClass(memberId){
+  const slotId = document.getElementById('f-member-add-slot').value;
+  const s = data.schedule.find(x=>x.id===slotId);
+  if(!s) return;
+  const next = nextOccurrenceDateFor(s);
+  if(!next){
+    /* No future occurrence to scope against (series about to end) — the only
+       meaningful change is the base list. */
+    if(!s.memberIds.includes(memberId)) s.memberIds.push(memberId);
+    saveData();
+    viewMember(memberId);
+    return;
+  }
+  openMembershipScopeModal(slotId, next, memberId, 'add', 'member');
+}
+function removeMemberFromClass(memberId, slotId){
+  const s = data.schedule.find(x=>x.id===slotId);
+  if(!s) return;
+  const next = nextOccurrenceDateFor(s);
+  if(!next){
+    s.memberIds = s.memberIds.filter(id=>id!==memberId);
+    saveData();
+    viewMember(memberId);
+    return;
+  }
+  openMembershipScopeModal(slotId, next, memberId, 'remove', 'member');
+}
+/* Undo one member's per-date delta from the member card. */
+function undoMembershipDelta(memberId, seriesId, date){
+  const ov = data.scheduleOverrides.find(o=>o.seriesId===seriesId && o.date===date);
+  if(ov){
+    if(ov.addMemberIds) ov.addMemberIds = ov.addMemberIds.filter(id=>id!==memberId);
+    if(ov.removeMemberIds) ov.removeMemberIds = ov.removeMemberIds.filter(id=>id!==memberId);
+    cleanupOverride(ov);
+    saveData();
+  }
+  viewMember(memberId);
+}
+
+/* ---------------- Employees ---------------- */
+/* A predefined picklist of staff names for the "Όνομα Μαθήματος" field in the
+   schedule form — a class in this gym is identified by which trainer runs it.
+   Kept as a simple {id, name} list managed here so the schedule form can
+   offer a dropdown instead of free text; the schedule slot itself still just
+   stores the chosen name as a plain string (same as before). Deleting an
+   employee leaves their classes untouched; renaming one follows through to
+   the schedule (see saveEmployee) so the class stays tied to them. */
+/* Every employee is classified into one of the same CLASS_CATEGORIES as
+   members/classes — this is what lets the schedule form narrow the "Όνομα
+   Μαθήματος" dropdown down to only the employees relevant to the class's
+   chosen category. Employees saved before this existed have no `category`
+   field; fall back to the same default used everywhere else in the app. */
+function employeeCategory(e){ return e.category || CLASS_CATEGORIES[0]; }
+function renderEmployees(){
+  const list = data.employees.slice().sort((a,b)=> a.name.localeCompare(b.name, 'el'));
+  const tally = employeeClassTally();
+  return `
+    <h2 class="page-title">Υπάλληλοι</h2>
+    <div class="subtle" style="margin-bottom:14px;">Η λίστα ονομάτων εδώ εμφανίζεται ως λίστα επιλογής στη φόρμα προσθήκης μαθήματος στο Εβδομαδιαίο Πρόγραμμα, φιλτραρισμένη ανά κατηγορία. Τα «μαθήματα» μετράνε συνεδρίες με τουλάχιστον μία παρουσία.</div>
+    <div class="toolbar">
+      <div></div>
+      <button class="btn" onclick="openEmployeeForm()">+ Προσθήκη Υπαλλήλου</button>
+    </div>
+    <div class="card">
+      ${list.length===0 ? '<div class="empty">Δεν υπάρχουν υπάλληλοι ακόμα. Πατήστε «Προσθήκη Υπαλλήλου» για να ξεκινήσετε.</div>' :
+        list.map(e=>{
+          const total = tally[e.name]?.total || 0;
+          return `<div class="enrolled-item">
+          <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${employeeColor(e)};margin-right:6px;"></span>${escapeHtml(e.name)} ${categoryBadge(employeeCategory(e))} <span class="badge muted">${total} μαθήματα</span></span>
+          <span>
+            <button class="btn secondary small" onclick="openEmployeeStats('${e.id}')">Λεπτομέρειες</button>
+            <button class="icon-btn" onclick="openEmployeeForm('${e.id}')">✎</button>
+            <button class="icon-btn" onclick="deleteEmployee('${e.id}')">✕</button>
+          </span>
+        </div>`;
+        }).join('')}
+    </div>
+  `;
+}
+function openEmployeeStats(id){
+  const e = data.employees.find(x=>x.id===id);
+  if(!e) return;
+  const stats = employeeClassTally()[e.name] || { total: 0, byMonth: {} };
+  const months = Object.keys(stats.byMonth).sort((a,b)=> b.localeCompare(a));
+  openModal(`
+    <h3>${escapeHtml(e.name)}</h3>
+    <div class="subtle" style="margin-bottom:10px;">Μαθήματα με τουλάχιστον μία παρουσία, ανά μήνα.</div>
+    ${months.length===0 ? '<div class="empty">Κανένα μάθημα ακόμα.</div>' :
+      `<div class="table-scroll"><table>
+        <thead><tr><th>Μήνας</th><th>Μαθήματα</th></tr></thead>
+        <tbody>
+          ${months.map(mo=>`<tr><td>${monthLabel(mo)}</td><td>${stats.byMonth[mo]}</td></tr>`).join('')}
+        </tbody>
+      </table></div>`}
+    <div class="subtle" style="margin-top:10px;font-weight:700;">Σύνολο: ${stats.total} μαθήματα</div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Κλείσιμο</button>
+    </div>
+  `);
+}
+function openEmployeeForm(id){
+  const e = id ? data.employees.find(x=>x.id===id) : null;
+  openModal(`
+    <h3>${e ? 'Επεξεργασία Υπαλλήλου' : 'Προσθήκη Υπαλλήλου'}</h3>
+    <label>Ονοματεπώνυμο</label>
+    <input id="f-emp-name" value="${escapeHtml(e?.name||'')}" placeholder="Γιώργος Παπαδόπουλος">
+    <label>Κατηγορία</label>
+    <select id="f-emp-category">
+      ${CLASS_CATEGORIES.map(c=>`<option value="${c}" ${(e?employeeCategory(e):CLASS_CATEGORIES[0])===c?'selected':''}>${c}</option>`).join('')}
+    </select>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Ακύρωση</button>
+      <button class="btn" onclick="saveEmployee(${e?`'${e.id}'`:'null'})">Αποθήκευση</button>
+    </div>
+  `);
+}
+function saveEmployee(id){
+  const name = document.getElementById('f-emp-name').value.trim();
+  if(!name){ alert('Παρακαλώ εισάγετε ένα όνομα.'); return; }
+  const category = document.getElementById('f-emp-category').value;
+  if(id){
+    const e = data.employees.find(e=>e.id===id);
+    const oldName = e.name;
+    Object.assign(e, { name, category });
+    /* Classes are identified by their trainer's name (a plain string on the
+       series), so a rename must follow through to the schedule — otherwise
+       the schedule keeps showing the old name and the employee's class tally,
+       color and dropdown entry all silently detach from them. Attendance is
+       keyed by series id, so nothing about credits changes. */
+    if(oldName !== name && !data.employees.some(x => x.id !== id && x.name === oldName)){
+      data.schedule.forEach(s => { if(s.className === oldName) s.className = name; });
+      data.scheduleOverrides.forEach(o => { if(o.className === oldName) o.className = name; });
+    }
+  } else {
+    const colorIndex = data.employees.reduce((max, e) => Number.isInteger(e.colorIndex) ? Math.max(max, e.colorIndex + 1) : max, 0);
+    data.employees.push({ id: uid(), name, category, colorIndex });
+  }
+  saveData();
+  closeModal();
+  render();
+}
+function deleteEmployee(id){
+  if(!confirm('Διαγραφή αυτού του υπαλλήλου; Τα μαθήματα που έχουν ήδη δημιουργηθεί με το όνομά του/της δεν θα αλλάξουν.')) return;
+  data.employees = data.employees.filter(e=>e.id!==id);
+  saveData();
+  render();
+}
+
+/* ---------------- Schedule (recurring series + per-date overrides) ---------------- */
+/* The program is a set of weekly-recurring "series" (data.schedule, unchanged
+   shape from before) each optionally bounded by validFrom/validUntil, plus a
+   list of per-(series,date) overrides (data.scheduleOverrides) that patch or
+   cancel ONE specific occurrence without touching the series. This is what
+   lets "change every Monday from now on" (bound/split the series) and
+   "change just this one Monday" (add a single-date override) coexist:
+     - editing with scope "only this date"      -> upsert an override
+     - editing with scope "this and following"  -> end the series the day
+       before, start a new series from this date with the edits baked in
+     - editing with scope "all occurrences"      -> edit the series in place
+   Attendance keeps keying off the series id (slotId) exactly as before —
+   overrides never introduce a second id space attendance needs to know
+   about — so every existing attendance/category/ledger function below is
+   untouched by this feature. */
+function seriesActiveOn(series, dateStr){
+  return dateStr >= (series.validFrom || '') && (!series.validUntil || dateStr <= series.validUntil);
+}
+/* Resolves what actually happens for one series on one date: null if that
+   occurrence was cancelled via an override, otherwise the series' fields
+   with any override fields patched on top. */
+function occurrenceForSeriesOnDate(series, dateStr){
+  const ov = data.scheduleOverrides.find(o => o.seriesId === series.id && o.date === dateStr);
+  if(ov && ov.cancelled) return null;
+  /* Membership can also be overridden per date: the effective list is the
+     series' base list minus this date's removals plus this date's additions. */
+  const added = ov?.addMemberIds || [];
+  const removed = ov?.removeMemberIds || [];
+  let memberIds = series.memberIds;
+  if(added.length || removed.length){
+    memberIds = series.memberIds.filter(id => !removed.includes(id))
+      .concat(added.filter(id => !series.memberIds.includes(id)));
+  }
+  return {
+    seriesId: series.id,
+    date: dateStr,
+    day: series.day,
+    startTime: ov?.startTime ?? series.startTime,
+    endTime: ov?.endTime ?? series.endTime,
+    className: ov?.className ?? series.className,
+    category: ov?.category ?? series.category,
+    capacity: ov?.capacity ?? series.capacity,
+    comments: ov?.comments ?? series.comments,
+    memberIds,
+    hasOverride: !!ov,
+  };
+}
+function occurrencesForDate(dateStr){
+  const dayCode = dayAbbrev(dateStr);
+  return data.schedule
+    .filter(s => s.day === dayCode && seriesActiveOn(s, dateStr))
+    .map(s => occurrenceForSeriesOnDate(s, dateStr))
+    .filter(Boolean)
+    .sort((a,b) => a.startTime < b.startTime ? -1 : 1);
+}
+/* The category a NEW attendance record on (seriesId, dateStr) should be
+   stamped with — resolves any per-date override so e.g. a one-off category
+   change for a single Monday correctly draws down that category's credits,
+   not the series' usual one. */
+function occurrenceCategoryOn(seriesId, dateStr){
+  const series = data.schedule.find(x => x.id === seriesId);
+  if(!series) return null;
+  const occ = occurrenceForSeriesOnDate(series, dateStr);
+  return occ ? occ.category : (series.category || CLASS_CATEGORIES[0]);
+}
+function dayBeforeStr(dateStr){ return addDaysLocalStr(dateStr, -1); }
+/* Ends `series` the day before `date` and starts a new segment from `date`
+   whose base values are `fields` (day and member list are carried over).
+   Overrides AND attendance on/after the split date move to the new segment —
+   attendance left on the old id would disappear from the rosters (which key
+   on the occurrence's seriesId), and re-marking someone already marked would
+   create a second record and charge them twice for the same class. The old
+   category is pinned onto moved records first: those visits happened under
+   the old settings, and moving them must not re-categorize them.
+   Callers must ensure date > validFrom — splitting at the first occurrence
+   would strand an empty, unreachable old segment (edit in place instead). */
+function splitSeriesAt(series, date, fields){
+  const oldValidUntil = series.validUntil;
+  series.validUntil = dayBeforeStr(date);
+  const newSeries = { id: uid(), day: series.day, memberIds: series.memberIds.slice(), validFrom: date, validUntil: oldValidUntil, ...fields };
+  data.schedule.push(newSeries);
+  data.scheduleOverrides.forEach(o => { if(o.seriesId === series.id && o.date >= date) o.seriesId = newSeries.id; });
+  const oldCat = series.category || CLASS_CATEGORIES[0];
+  data.attendance.forEach(a => {
+    if(a.slotId === series.id && a.date >= date){
+      if(!a.category) a.category = oldCat;
+      a.slotId = newSeries.id;
+    }
+  });
+  return newSeries;
+}
+
+let scheduleCategoryFilter = 'all';
+let scheduleWeekStart = mondayOf(todayStr());
+let scheduleCalMonth = todayStr().slice(0,7); // 'YYYY-MM'
+let scheduleCalendarOpen = false;
+function shiftScheduleWeek(delta){
+  scheduleWeekStart = addDaysLocalStr(scheduleWeekStart, delta*7);
+  scheduleCalMonth = scheduleWeekStart.slice(0,7);
+  render();
+}
+function goToScheduleThisWeek(){
+  scheduleWeekStart = mondayOf(todayStr());
+  scheduleCalMonth = scheduleWeekStart.slice(0,7);
+  render();
+}
+function toggleScheduleCalendar(){
+  scheduleCalendarOpen = !scheduleCalendarOpen;
+  render();
+}
+function scheduleCalShiftMonth(delta){
+  const [y, mo] = scheduleCalMonth.split('-').map(Number);
+  const d = new Date(y, mo-1+delta, 1);
+  scheduleCalMonth = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+  render();
+}
+function scheduleCalGoToday(){
+  goToScheduleThisWeek();
+}
+/* Picking any date in the calendar jumps the week view to the week that
+   date falls in — the schedule works at week granularity, so there's no
+   single-day selection the way Attendance has. */
+function selectScheduleCalDate(dateStr){
+  scheduleWeekStart = mondayOf(dateStr);
+  scheduleCalMonth = dateStr.slice(0,7);
+  render();
+}
+function renderScheduleCalendarBar(){
+  const weekDates = DAYS.map((d,i) => addDaysLocalStr(scheduleWeekStart, i));
+  if(!scheduleCalendarOpen){
+    return `
+      <div class="cal-compact">
+        <button class="icon-btn" onclick="shiftScheduleWeek(-1)">‹</button>
+        <div class="cal-compact-label" onclick="toggleScheduleCalendar()">📅 ${formatDate(weekDates[0])} – ${formatDate(weekDates[6])}</div>
+        <button class="icon-btn" onclick="shiftScheduleWeek(1)">›</button>
+        <button class="btn secondary small" onclick="toggleScheduleCalendar()">Άνοιγμα Ημερολογίου</button>
+      </div>
+    `;
+  }
+  const weekEnd = weekDates[6];
+  return `
+    <div class="cal-compact" style="margin-bottom:10px;">
+      <div class="cal-compact-label">📅 Ημερολόγιο</div>
+      <button class="btn secondary small" onclick="toggleScheduleCalendar()">Σύμπτυξη</button>
+    </div>
+    ${renderCalendarGrid(
+      scheduleCalMonth,
+      c => c >= scheduleWeekStart && c <= weekEnd,
+      c => occurrencesForDate(c).length,
+      'selectScheduleCalDate', 'scheduleCalShiftMonth', 'scheduleCalGoToday'
+    )}
+  `;
+}
+function renderSchedule(){
+  const weekDates = DAYS.map((d,i) => addDaysLocalStr(scheduleWeekStart, i));
+  const today = todayStr();
+  return `
+    <h2 class="page-title">Πρόγραμμα</h2>
+    <div class="subtle" style="margin-bottom:14px;">Το πρόγραμμα ακολουθεί πραγματικές ημερομηνίες. Μια αλλαγή μπορεί να εφαρμοστεί μόνο σε μία ημέρα ή σε όλες τις επόμενες επαναλήψεις — η επιλογή γίνεται κάθε φορά που επεξεργάζεστε ή διαγράφετε ένα μάθημα.</div>
+    <div class="card">
+      ${renderScheduleCalendarBar()}
+    </div>
+    <div class="cat-filter">
+      <button class="btn ${scheduleCategoryFilter==='all'?'':'secondary'} small" onclick="scheduleCategoryFilter='all'; render();">Όλα</button>
+      ${CLASS_CATEGORIES.map(c=>`<button class="btn ${scheduleCategoryFilter===c?'':'secondary'} small" onclick="scheduleCategoryFilter='${c}'; render();">${c}</button>`).join('')}
+    </div>
+    <div class="week-grid">
+      ${DAYS.map((day,i) => {
+        const date = weekDates[i];
+        const occs = occurrencesForDate(date).filter(o => scheduleCategoryFilter==='all' || o.category===scheduleCategoryFilter);
+        return `<div class="day-col">
+          <h4${date===today?' style="color:var(--primary);"':''}>${DAY_SHORT[day]} ${formatDate(date).slice(0,5)}</h4>
+          ${occs.map(o=>`
+            <div class="slot" onclick="viewOccurrence('${o.seriesId}','${date}')" style="border-left:4px solid ${classNameColor(o.className)};">
+              <div class="t">${o.startTime}–${o.endTime} — <span style="color:${classNameColor(o.className)};">${escapeHtml(o.className)}</span>${o.comments?' 💬':''}${o.hasOverride?' ✱':''}</div>
+              <div class="c">${o.memberIds.length}/${o.capacity} θέσεις</div>
+              <div style="margin-top:4px;">${categoryBadge(o.category)}</div>
+            </div>
+          `).join('')}
+          ${cancelledSeriesForDate(date).filter(s => scheduleCategoryFilter==='all' || (s.category||CLASS_CATEGORIES[0])===scheduleCategoryFilter).map(s=>`
+            <div class="slot" style="background:#f1f5f9;opacity:.75;cursor:default;">
+              <div class="t" style="text-decoration:line-through;">${s.startTime}–${s.endTime} — ${escapeHtml(s.className)}</div>
+              <div class="c">Ακυρώθηκε για αυτή την ημερομηνία</div>
+              <button class="btn secondary small" style="margin-top:6px;" onclick="restoreOccurrence('${s.id}','${date}')">↩ Επαναφορά</button>
+            </div>
+          `).join('')}
+          <button class="add-slot-btn" onclick="openNewSeriesForm('${day}','${date}')">+ Προσθήκη μαθήματος</button>
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="subtle" style="margin-top:10px;">✱ = προσαρμοσμένο μόνο για αυτή την ημερομηνία</div>
+  `;
+}
+/* Builds the <option> list for the "Όνομα Μαθήματος" dropdown, restricted to
+   employees classified in the given category. `keepName`, if given, is kept
+   as a selectable (and pre-selected) option even if it doesn't belong to
+   that category — used so editing an existing class never silently swaps
+   its name out from under you just because the category list was rebuilt. */
+function slotClassNameOptionsHtml(category, keepName){
+  const names = data.employees.filter(e=>employeeCategory(e)===category)
+    .map(e=>e.name).sort((a,b)=>a.localeCompare(b,'el'));
+  if(keepName && !names.includes(keepName)) names.unshift(keepName);
+  if(names.length===0) return '<option value="">— Κανένας υπάλληλος σε αυτή την κατηγορία —</option>';
+  return names.map(n=>`<option value="${escapeHtml(n)}" ${keepName===n?'selected':''}>${escapeHtml(n)}</option>`).join('');
+}
+function onSlotCategoryChange(){
+  const category = document.getElementById('f-category').value;
+  document.getElementById('f-class').innerHTML = slotClassNameOptionsHtml(category, null);
+}
+/* Reads the shared time/category/name/capacity/comments fields present in
+   both the "new series" and "edit occurrence" forms. */
+function readSlotFormFields(){
+  return {
+    className: document.getElementById('f-class').value.trim(),
+    startTime: document.getElementById('f-start').value || '09:00',
+    endTime: document.getElementById('f-end').value || '10:00',
+    category: document.getElementById('f-category').value,
+    capacity: Math.max(1, parseInt(document.getElementById('f-cap').value) || 1),
+    comments: document.getElementById('f-comments').value.trim(),
+  };
+}
+function slotFormFieldsHtml(occ){
+  const initialCategory = occ?.category || CLASS_CATEGORIES[0];
+  return `
+    <div class="form-row">
+      <div>
+        <label>Ώρα Έναρξης</label>
+        <input id="f-start" type="time" value="${occ?.startTime || '09:00'}">
+      </div>
+      <div>
+        <label>Ώρα Λήξης</label>
+        <input id="f-end" type="time" value="${occ?.endTime || '10:00'}">
+      </div>
+    </div>
+    <label>Κατηγορία</label>
+    <select id="f-category" onchange="onSlotCategoryChange()">
+      ${CLASS_CATEGORIES.map(c=>`<option value="${c}" ${initialCategory===c?'selected':''}>${c}</option>`).join('')}
+    </select>
+    <label>Όνομα Μαθήματος</label>
+    <select id="f-class">
+      ${slotClassNameOptionsHtml(initialCategory, occ?.className)}
+    </select>
+    <label>Χωρητικότητα (αριθμός θέσεων)</label>
+    <input id="f-cap" type="number" min="1" value="${occ?.capacity || 10}">
+    <label>Σχόλια</label>
+    <textarea id="f-comments" rows="3" placeholder="Σημειώσεις για αυτό το μάθημα...">${escapeHtml(occ?.comments||'')}</textarea>
+  `;
+}
+function openNewSeriesForm(day, date){
+  if(data.employees.length===0){ alert('Προσθέστε πρώτα έναν υπάλληλο (καρτέλα Υπάλληλοι).'); return; }
+  openModal(`
+    <h3>Προσθήκη Μαθήματος</h3>
+    <div class="subtle" style="margin-bottom:10px;">${DAY_FULL[day]} · θα επαναλαμβάνεται κάθε εβδομάδα ξεκινώντας από ${formatDate(date)}.</div>
+    ${slotFormFieldsHtml(null)}
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Ακύρωση</button>
+      <button class="btn" onclick="saveNewSeries('${day}','${date}')">Αποθήκευση</button>
+    </div>
+  `);
+}
+function saveNewSeries(day, date){
+  const f = readSlotFormFields();
+  if(!f.className){ alert('Δεν υπάρχει υπάλληλος σε αυτή την κατηγορία. Προσθέστε έναν πρώτα (καρτέλα Υπάλληλοι).'); return; }
+  if(f.endTime <= f.startTime){ alert('Η ώρα λήξης πρέπει να είναι μετά την ώρα έναρξης.'); return; }
+  data.schedule.push({ id: uid(), day, validFrom: date, validUntil: null, memberIds: [], ...f });
+  saveData();
+  closeModal();
+  render();
+}
+function viewOccurrence(seriesId, date){
+  const series = data.schedule.find(x=>x.id===seriesId);
+  if(!series) return;
+  const occ = occurrenceForSeriesOnDate(series, date);
+  if(!occ) return;
+  const enrolled = occ.memberIds.map(mid=>data.members.find(m=>m.id===mid)).filter(Boolean).sort((a,b)=>a.name.localeCompare(b.name,'el'));
+  const available = data.members.filter(m=>!occ.memberIds.includes(m.id)).sort((a,b)=>a.name.localeCompare(b.name,'el'));
+  const full = occ.memberIds.length >= occ.capacity;
+  const addedThisDateIds = data.scheduleOverrides.find(o=>o.seriesId===seriesId && o.date===date)?.addMemberIds || [];
+  openModal(`
+    <h3>${DAY_FULL[series.day]} ${formatDate(date)} · ${occ.startTime}–${occ.endTime} — <span style="color:${classNameColor(occ.className)};">${escapeHtml(occ.className)}</span></h3>
+    <div style="margin:4px 0;">${categoryBadge(occ.category)}${occ.hasOverride?' <span class="badge muted">✱ Προσαρμοσμένο για αυτή την ημερομηνία</span>':''}</div>
+    <div class="subtle">${occ.memberIds.length}/${occ.capacity} θέσεις καλυμμένες</div>
+    ${occ.comments ? `<div class="subtle" style="margin-top:8px;white-space:pre-wrap;">${escapeHtml(occ.comments)}</div>` : ''}
+
+    <div class="section-title">Εγγεγραμμένοι</div>
+    ${enrolled.length===0 ? '<div class="subtle">Κανείς δεν έχει κλείσει θέση ακόμα.</div>' :
+      enrolled.map(m=>`<div class="enrolled-item"><span>${escapeHtml(m.name)}${addedThisDateIds.includes(m.id)?' <span class="badge muted">✱ μόνο αυτή την ημερομηνία</span>':''}</span><button class="icon-btn" onclick="removeFromSlot('${seriesId}','${m.id}','${date}')">✕</button></div>`).join('')}
+
+    <div class="section-title">Προσθήκη μέλους</div>
+    ${full ? '<div class="subtle">Αυτό το μάθημα είναι πλήρες.</div>' :
+      available.length===0 ? '<div class="subtle">Όλα τα μέλη έχουν ήδη κλείσει θέση.</div>' :
+      `<div class="form-row" style="align-items:flex-end;">
+        <div>${memberAutocompleteHtml('f-add-member', available, null)}</div>
+        <div style="flex:0 0 auto;"><button class="btn small" onclick="addToSlot('${seriesId}','${date}')">Προσθήκη</button></div>
+      </div>`}
+    <div class="subtle" style="margin-top:6px;">Κατά την προσθήκη ή αφαίρεση μέλους θα ερωτηθείτε αν η αλλαγή ισχύει μόνο για αυτή την ημερομηνία, για τις επόμενες επαναλήψεις, ή για όλες.</div>
+
+    <div class="modal-actions">
+      <button class="btn danger" onclick="confirmDeleteOccurrence('${seriesId}','${date}')">Διαγραφή</button>
+      <button class="btn secondary" onclick="openOccurrenceEditForm('${seriesId}','${date}')">Επεξεργασία</button>
+      <button class="btn secondary" onclick="closeModal()">Κλείσιμο</button>
+    </div>
+  `);
+}
+function scopeChoiceHtml(date){
+  return `
+    <label style="margin-top:16px;">Εφαρμογή σε</label>
+    <div style="display:flex;flex-direction:column;gap:6px;">
+      <label style="display:flex;align-items:center;gap:8px;font-weight:400;color:var(--text);margin:0;"><input type="radio" name="f-scope" value="only" checked style="width:auto;"> Μόνο σε αυτή την ημερομηνία (${formatDate(date)})</label>
+      <label style="display:flex;align-items:center;gap:8px;font-weight:400;color:var(--text);margin:0;"><input type="radio" name="f-scope" value="following" style="width:auto;"> Σε αυτή και όλες τις επόμενες επαναλήψεις</label>
+      <label style="display:flex;align-items:center;gap:8px;font-weight:400;color:var(--text);margin:0;"><input type="radio" name="f-scope" value="all" style="width:auto;"> Σε όλες τις επαναλήψεις (παρελθόν και μέλλον)</label>
+    </div>
+  `;
+}
+function openOccurrenceEditForm(seriesId, date){
+  const series = data.schedule.find(x=>x.id===seriesId);
+  if(!series) return;
+  const occ = occurrenceForSeriesOnDate(series, date);
+  if(!occ) return;
+  openModal(`
+    <h3>Επεξεργασία Μαθήματος</h3>
+    <div class="subtle" style="margin-bottom:10px;">${DAY_FULL[series.day]} ${formatDate(date)}</div>
+    ${slotFormFieldsHtml(occ)}
+    ${scopeChoiceHtml(date)}
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="viewOccurrence('${seriesId}','${date}')">Ακύρωση</button>
+      <button class="btn" onclick="saveOccurrenceEdit('${seriesId}','${date}')">Αποθήκευση</button>
+    </div>
+  `);
+}
+function saveOccurrenceEdit(seriesId, date){
+  const f = readSlotFormFields();
+  if(!f.className){ alert('Δεν υπάρχει υπάλληλος σε αυτή την κατηγορία. Προσθέστε έναν πρώτα (καρτέλα Υπάλληλοι).'); return; }
+  if(f.endTime <= f.startTime){ alert('Η ώρα λήξης πρέπει να είναι μετά την ώρα έναρξης.'); return; }
+  const scope = document.querySelector('input[name="f-scope"]:checked').value;
+  const series = data.schedule.find(x=>x.id===seriesId);
+  if(!series) return;
+
+  if(scope === 'only'){
+    /* Store only the fields that actually differ from the series, so a form
+       saved unchanged doesn't leave a ✱ "customized" marker behind — and an
+       edit that puts everything back to the series' values removes it. */
+    let ov = data.scheduleOverrides.find(o=>o.seriesId===seriesId && o.date===date);
+    if(!ov){ ov = { id: uid(), seriesId, date }; data.scheduleOverrides.push(ov); }
+    ['startTime','endTime','className','category','capacity','comments'].forEach(k => {
+      const seriesVal = k === 'category' ? (series.category || CLASS_CATEGORIES[0]) : (k === 'comments' ? (series.comments || '') : series[k]);
+      if(f[k] === seriesVal) delete ov[k]; else ov[k] = f[k];
+    });
+    delete ov.cancelled;
+    cleanupOverride(ov);
+  } else if(scope === 'following' && (!series.validFrom || date > series.validFrom)){
+    const newSeries = splitSeriesAt(series, date, f);
+    /* The override for this exact date is redundant now — its edits are
+       already the new series' base values. */
+    data.scheduleOverrides = data.scheduleOverrides.filter(o => !(o.seriesId===newSeries.id && o.date===date));
+  } else { // 'all' — or 'following' from the series' first occurrence, where a
+           // split would only leave behind an empty, unreachable old segment
+    /* Changing the whole series' category must not re-categorize its past
+       attendance — pin the old category onto any record that still relied
+       on the live lookup, same as the old single-series edit did. */
+    const oldCat = series.category || CLASS_CATEGORIES[0];
+    if(oldCat !== f.category){
+      data.attendance.forEach(a => { if(a.slotId === seriesId && !a.category) a.category = oldCat; });
+    }
+    Object.assign(series, f);
+  }
+  saveData();
+  closeModal();
+  render();
+}
+function confirmDeleteOccurrence(seriesId, date){
+  openModal(`
+    <h3>Διαγραφή Μαθήματος</h3>
+    <div class="subtle" style="margin-bottom:14px;">${formatDate(date)} — επιλέξτε τι θέλετε να διαγράψετε.</div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <button class="btn danger" onclick="deleteOccurrence('${seriesId}','${date}','only')">Μόνο αυτή την ημερομηνία</button>
+      <button class="btn danger" onclick="deleteOccurrence('${seriesId}','${date}','following')">Αυτή και όλες τις επόμενες επαναλήψεις</button>
+      <button class="btn danger" onclick="deleteOccurrence('${seriesId}','${date}','all')">Όλες τις επαναλήψεις (παρελθόν και μέλλον)</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="viewOccurrence('${seriesId}','${date}')">Ακύρωση</button>
+    </div>
+  `);
+}
+function deleteOccurrence(seriesId, date, scope){
+  if(!confirm('Είστε σίγουρος/η;')) return;
+  const series = data.schedule.find(x=>x.id===seriesId);
+  if(!series) return;
+  /* Ending a series the day before its own first occurrence would leave a
+     segment with validUntil < validFrom — never rendered again, impossible
+     to reach from the UI, but still stored forever. Deleting "this and
+     following" from the very first date IS deleting the whole series. */
+  if(scope === 'following' && series.validFrom && date <= series.validFrom) scope = 'all';
+  if(scope === 'only'){
+    /* Attendance already marked for this date belongs to a class that is now
+       being cancelled — leaving it would keep charging those members for a
+       class that never ran, invisibly (the roster hides cancelled dates).
+       Ask, and remove it together with the occurrence. */
+    const marked = data.attendance.filter(a => a.slotId===seriesId && a.date===date);
+    if(marked.length > 0){
+      if(!confirm(`Υπάρχουν ήδη ${marked.length} καταγραφές παρουσίας για αυτή την ημερομηνία. Θα διαγραφούν μαζί με το μάθημα (τα μαθήματα θα επιστραφούν στα μέλη). Συνέχεια;`)) return;
+      data.attendance = data.attendance.filter(a => !(a.slotId===seriesId && a.date===date));
+    }
+    let ov = data.scheduleOverrides.find(o=>o.seriesId===seriesId && o.date===date);
+    if(!ov){ ov = { id: uid(), seriesId, date }; data.scheduleOverrides.push(ov); }
+    Object.keys(ov).forEach(k => { if(!['id','seriesId','date'].includes(k)) delete ov[k]; });
+    ov.cancelled = true;
+  } else if(scope === 'following'){
+    series.validUntil = dayBeforeStr(date);
+    data.scheduleOverrides = data.scheduleOverrides.filter(o => !(o.seriesId===seriesId && o.date >= date));
+  } else { // 'all'
+    /* Pin the series' category onto its attendance history before it goes
+       away — otherwise those records would fall back to Βάρη and consumed
+       credits in other categories would silently be "refunded". */
+    const cat = series.category || CLASS_CATEGORIES[0];
+    data.attendance.forEach(a => { if(a.slotId === seriesId && !a.category) a.category = cat; });
+    data.schedule = data.schedule.filter(x=>x.id!==seriesId);
+    data.scheduleOverrides = data.scheduleOverrides.filter(o=>o.seriesId!==seriesId);
+  }
+  saveData();
+  closeModal();
+  render();
+}
+/* A date cancelled by mistake can be brought back: the cancellation is only
+   an override flag, so dropping it restores the series' normal occurrence. */
+function restoreOccurrence(seriesId, date){
+  const ov = data.scheduleOverrides.find(o=>o.seriesId===seriesId && o.date===date);
+  if(!ov || !ov.cancelled) return;
+  delete ov.cancelled;
+  cleanupOverride(ov);
+  saveData();
+  render();
+}
+function cancelledSeriesForDate(dateStr){
+  const dayCode = dayAbbrev(dateStr);
+  return data.schedule.filter(s => s.day === dayCode && seriesActiveOn(s, dateStr) &&
+    data.scheduleOverrides.some(o => o.seriesId === s.id && o.date === dateStr && o.cancelled))
+    .sort((a,b) => a.startTime < b.startTime ? -1 : 1);
+}
+function addToSlot(slotId, date){
+  const memberId = document.getElementById('f-add-member').value;
+  if(!memberId){ alert('Παρακαλώ επιλέξτε ένα μέλος από τη λίστα.'); return; }
+  openMembershipScopeModal(slotId, date, memberId, 'add');
+}
+function removeFromSlot(slotId, memberId, date){
+  openMembershipScopeModal(slotId, date, memberId, 'remove');
+}
+/* Adding/removing a member asks for a scope, exactly like editing or deleting
+   an occurrence does: one date only (a per-date membership delta on that
+   date's override), this-and-following (split the series, same as field
+   edits), or every occurrence (the series' base list, the only behavior that
+   existed before per-date membership). */
+function openMembershipScopeModal(seriesId, date, memberId, action, origin){
+  /* origin: 'occ' (default) reached from the class occurrence modal, 'member'
+     reached from the member card — decides which view to return to. From the
+     member card there's no specific date on screen, so the prompt anchors to
+     the class's NEXT occurrence (nextOccurrenceDateFor). */
+  origin = origin || 'occ';
+  const m = data.members.find(x=>x.id===memberId);
+  const title = `${action==='add' ? 'Προσθήκη' : 'Αφαίρεση'}: ${m ? m.name : 'μέλος'}`;
+  const args = `'${seriesId}','${date}','${memberId}','${action}'`;
+  openModal(`
+    <h3>${escapeHtml(title)}</h3>
+    <div class="subtle" style="margin-bottom:14px;">Επιλέξτε πού θα εφαρμοστεί η αλλαγή.</div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <button class="btn" onclick="applyMembershipChange(${args},'only','${origin}')">Μόνο σε αυτή την ημερομηνία (${formatDate(date)})</button>
+      <button class="btn" onclick="applyMembershipChange(${args},'following','${origin}')">Σε αυτή και όλες τις επόμενες επαναλήψεις</button>
+      <button class="btn" onclick="applyMembershipChange(${args},'all','${origin}')">Σε όλες τις επαναλήψεις (παρελθόν και μέλλον)</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="${origin==='member' ? `viewMember('${memberId}')` : `viewOccurrence('${seriesId}','${date}')`}">Ακύρωση</button>
+    </div>
+  `);
+}
+/* Two series are consecutive segments of the SAME class (left behind by
+   "this and following" splits) when they share day, start time, trainer and
+   category AND their validity windows never overlap — segments of one chain
+   are strictly consecutive. Two classes that genuinely run in parallel (a
+   weights class and a pilates class both at Monday 18:00) overlap in time,
+   so they are never treated as siblings and never receive each other's
+   membership changes. */
+function isSiblingSegment(a, b){
+  if(a.id === b.id) return false;
+  if(a.day !== b.day || a.startTime !== b.startTime || a.className !== b.className ||
+     (a.category || CLASS_CATEGORIES[0]) !== (b.category || CLASS_CATEGORIES[0])) return false;
+  const aFrom = a.validFrom || '', bFrom = b.validFrom || '';
+  const aUntil = a.validUntil || '9999-12-31', bUntil = b.validUntil || '9999-12-31';
+  const overlap = aFrom <= bUntil && bFrom <= aUntil;
+  return !overlap;
+}
+/* Drops delta fields that no longer do anything, and the whole override once
+   nothing about the occurrence is customized any more — so the ✱ marker only
+   ever shows on dates that really differ from the series. */
+function cleanupOverride(ov){
+  if(ov.addMemberIds && ov.addMemberIds.length===0) delete ov.addMemberIds;
+  if(ov.removeMemberIds && ov.removeMemberIds.length===0) delete ov.removeMemberIds;
+  const meaningful = ov.cancelled || ov.startTime != null || ov.endTime != null || ov.className != null ||
+    ov.category != null || ov.capacity != null || ov.comments != null || ov.addMemberIds || ov.removeMemberIds;
+  if(!meaningful) data.scheduleOverrides = data.scheduleOverrides.filter(o => o !== ov);
+}
+function applyMembershipChange(seriesId, date, memberId, action, scope, origin){
+  const series = data.schedule.find(x=>x.id===seriesId);
+  if(!series) return;
+  let viewId = seriesId;
+  const returnToView = () => origin==='member' ? viewMember(memberId) : viewOccurrence(viewId, date);
+  if(action === 'add'){
+    const occ = occurrenceForSeriesOnDate(series, date);
+    if(occ && occ.memberIds.length >= occ.capacity){ alert('Αυτό το μάθημα είναι πλήρες.'); returnToView(); return; }
+  }
+  if(scope === 'only'){
+    let ov = data.scheduleOverrides.find(o=>o.seriesId===seriesId && o.date===date);
+    if(!ov){ ov = { id: uid(), seriesId, date }; data.scheduleOverrides.push(ov); }
+    ov.addMemberIds = ov.addMemberIds || [];
+    ov.removeMemberIds = ov.removeMemberIds || [];
+    if(action === 'add'){
+      /* Un-removing a base member IS the add; only someone outside the base
+         list needs an explicit per-date addition. */
+      ov.removeMemberIds = ov.removeMemberIds.filter(id=>id!==memberId);
+      if(!series.memberIds.includes(memberId) && !ov.addMemberIds.includes(memberId)) ov.addMemberIds.push(memberId);
+    } else {
+      ov.addMemberIds = ov.addMemberIds.filter(id=>id!==memberId);
+      if(series.memberIds.includes(memberId) && !ov.removeMemberIds.includes(memberId)) ov.removeMemberIds.push(memberId);
+    }
+    cleanupOverride(ov);
+  } else {
+    let target = series;
+    if(scope === 'following' && (!series.validFrom || date > series.validFrom)){
+      const { startTime, endTime, className, category, capacity, comments } = series;
+      target = splitSeriesAt(series, date, { startTime, endTime, className, category, capacity, comments });
+      viewId = target.id;
+    }
+    const applyTo = s => {
+      if(action === 'add'){ if(!s.memberIds.includes(memberId)) s.memberIds.push(memberId); }
+      else s.memberIds = s.memberIds.filter(id=>id!==memberId);
+    };
+    applyTo(target);
+    /* A class that has been split lives as several consecutive segments.
+       "Following" and "all" must reach the sibling segments too — otherwise
+       a removed member silently pops back into the class the day the next
+       segment takes over. See isSiblingSegment() for what counts as the
+       same class — notably NOT a different trainer's class that merely runs
+       in parallel at the same hour. */
+    data.schedule.forEach(s => {
+      if(!isSiblingSegment(target, s)) return;
+      if(scope === 'all' || (s.validFrom || '') >= date) applyTo(s);
+    });
+    /* A leftover per-date delta for this member on the date being viewed
+       would mask the change on that very date — clear it. Deltas explicitly
+       set on OTHER dates stay: they were one-date decisions of their own. */
+    const ov = data.scheduleOverrides.find(o=>o.seriesId===target.id && o.date===date);
+    if(ov){
+      if(ov.addMemberIds) ov.addMemberIds = ov.addMemberIds.filter(id=>id!==memberId);
+      if(ov.removeMemberIds) ov.removeMemberIds = ov.removeMemberIds.filter(id=>id!==memberId);
+      cleanupOverride(ov);
+    }
+  }
+  saveData();
+  returnToView();
+}
+
+/* ---------------- Attendance ---------------- */
+let attendanceDate = todayStr();
+let attendanceCategoryFilter = 'all';
+let attendanceCalMonth = todayStr().slice(0,7); // 'YYYY-MM'
+let calendarOpen = false;
+
+function toggleCalendar(){
+  calendarOpen = !calendarOpen;
+  render();
+}
+function calShiftDay(delta){
+  const d = new Date(attendanceDate + 'T00:00:00');
+  d.setDate(d.getDate() + delta);
+  /* localDateStr, not toISOString(): UTC would shift the date by a day in UTC+ timezones. */
+  attendanceDate = localDateStr(d);
+  attendanceCalMonth = attendanceDate.slice(0,7);
+  render();
+}
+function renderAttendanceBar(){
+  if(!calendarOpen){
+    return `
+      <div class="cal-compact">
+        <button class="icon-btn" onclick="calShiftDay(-1)">‹</button>
+        <div class="cal-compact-label" onclick="toggleCalendar()">📅 ${formatDate(attendanceDate)}</div>
+        <button class="icon-btn" onclick="calShiftDay(1)">›</button>
+        <button class="btn secondary small" onclick="toggleCalendar()">Άνοιγμα Ημερολογίου</button>
+      </div>
+    `;
+  }
+  return `
+    <div class="cal-compact" style="margin-bottom:10px;">
+      <div class="cal-compact-label">📅 Ημερολόγιο</div>
+      <button class="btn secondary small" onclick="toggleCalendar()">Σύμπτυξη</button>
+    </div>
+    ${renderAttendanceCalendar()}
+  `;
+}
+/* Shared month-grid renderer behind both the Attendance and Schedule pages'
+   collapsible calendars — same layout/markup, parameterized by what counts
+   as "selected" (a single day for attendance, a whole week for schedule),
+   what number badge each day shows, and which handler names to wire up (the
+   two pages keep independent open/month/selection state, so this only
+   builds the grid itself). */
+function renderCalendarGrid(calMonth, isSelectedFn, countFn, selectHandler, shiftHandler, todayHandler){
+  const [y, mo] = calMonth.split('-').map(Number);
+  const first = new Date(y, mo-1, 1);
+  const startDow = (first.getDay() + 6) % 7; // Monday = 0
+  const daysInMonth = new Date(y, mo, 0).getDate();
+
+  const cells = [];
+  for(let i=0; i<startDow; i++) cells.push(null);
+  for(let d=1; d<=daysInMonth; d++) cells.push(`${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`);
+  while(cells.length % 7 !== 0) cells.push(null);
+
+  const monthLabel = first.toLocaleDateString('el-GR', {month:'long', year:'numeric'});
+  const today = todayStr();
+
+  return `
+    <div class="cal-header">
+      <button class="btn secondary small" onclick="${shiftHandler}(-1)">‹ Προηγ.</button>
+      <div class="cal-month-label">${monthLabel}</div>
+      <button class="btn secondary small" onclick="${shiftHandler}(1)">Επόμ. ›</button>
+      <button class="btn secondary small" onclick="${todayHandler}()">Σήμερα</button>
+    </div>
+    <div class="cal-grid">
+      ${DAYS.map(d=>`<div class="cal-dow">${DAY_SHORT[d]}</div>`).join('')}
+      ${cells.map(c=>{
+        if(!c) return `<div class="cal-cell cal-empty"></div>`;
+        const count = countFn(c);
+        const cls = ['cal-cell'];
+        if(c === today) cls.push('cal-today');
+        if(isSelectedFn(c)) cls.push('cal-selected');
+        if(count > 0) cls.push('cal-has-att');
+        const dayNum = parseInt(c.slice(8,10));
+        return `<div class="${cls.join(' ')}" onclick="${selectHandler}('${c}')">
+          <div class="cal-daynum">${dayNum}</div>
+          ${count>0 ? `<div class="cal-count">${count} ✓</div>` : ''}
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+function renderAttendanceCalendar(){
+  /* Only actual presences get a ✓ badge — absences (justified or not) are not
+     "people who came", matching attendanceCounts() and the dashboard stats. */
+  const counts = {};
+  data.attendance.forEach(a => { if(isPresentRecord(a)) counts[a.date] = (counts[a.date] || 0) + 1; });
+  return renderCalendarGrid(
+    attendanceCalMonth,
+    c => c === attendanceDate,
+    c => counts[c] || 0,
+    'selectCalDate', 'calShiftMonth', 'calGoToday'
+  );
+}
+function calShiftMonth(delta){
+  const [y, mo] = attendanceCalMonth.split('-').map(Number);
+  const d = new Date(y, mo-1+delta, 1);
+  attendanceCalMonth = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+  render();
+}
+function calGoToday(){
+  attendanceCalMonth = todayStr().slice(0,7);
+  attendanceDate = todayStr();
+  render();
+}
+function selectCalDate(dateStr){
+  attendanceDate = dateStr;
+  attendanceCalMonth = dateStr.slice(0,7);
+  render();
+}
+
+function renderAttendance(){
+  /* There's no "walk-in" concept — every attendance must belong to a booked
+     class. Presence/absence is recorded entirely per class in renderClassRosters(). */
+  const summary = data.members.map(m=>{
+    const att = memberPresentAttendance(m.id);
+    return {m, count: att.length, last: att[0]?.date};
+  }).sort((a,b)=> b.count - a.count);
+
+  return `
+    <h2 class="page-title">Παρουσίες</h2>
+
+    <div class="card">
+      ${renderAttendanceBar()}
+      <div class="subtle" style="margin-top:10px;">
+        ${(() => {
+          const c = attendanceCounts(attendanceDate);
+          return CLASS_CATEGORIES.map(cat => `${cat}: ${c.byCategory[cat]}`).join(' · ');
+        })()}
+      </div>
+    </div>
+
+    <div class="cat-filter">
+      <button class="btn ${attendanceCategoryFilter==='all'?'':'secondary'} small" onclick="attendanceCategoryFilter='all'; render();">Όλα</button>
+      ${CLASS_CATEGORIES.map(c=>`<button class="btn ${attendanceCategoryFilter===c?'':'secondary'} small" onclick="attendanceCategoryFilter='${c}'; render();">${c}</button>`).join('')}
+    </div>
+
+    ${renderClassRosters()}
+
+    <div class="card">
+      <div class="section-title">Σύνοψη Παρουσιών (συνολικά)</div>
+      ${summary.length===0 ? '<div class="empty">Δεν υπάρχουν μέλη ακόμα.</div>' :
+      `<div class="table-scroll"><table>
+        <thead><tr><th>Όνομα</th><th>Ημέρες Παρουσίας</th><th>Τελευταία Παρουσία</th></tr></thead>
+        <tbody>
+          ${summary.map(s=>`<tr><td>${escapeHtml(s.m.name)}</td><td>${s.count}</td><td>${s.last?formatDate(s.last):'—'}</td></tr>`).join('')}
+        </tbody>
+      </table></div>`}
+    </div>
+  `;
+}
+function renderClassRosters(){
+  const dayCode = dayAbbrev(attendanceDate);
+  const occs = occurrencesForDate(attendanceDate).filter(o => attendanceCategoryFilter==='all' || o.category===attendanceCategoryFilter);
+  if(occs.length===0) return '';
+  return `
+    <div class="card">
+      <div class="section-title">Μαθήματα (${DAY_FULL[dayCode]})</div>
+      ${occs.map((s,i)=>{
+        const enrolled = s.memberIds.map(mid=>data.members.find(m=>m.id===mid)).filter(Boolean).sort((a,b)=>a.name.localeCompare(b.name,'el'));
+        /* Presence/absence is scoped to THIS class (matched by slotId=seriesId
+           plus the date), not just the date — a member enrolled in both a
+           gym and a pilates class on the same day gets an independent status
+           in each roster. */
+        const rows = enrolled.map(m=>{
+          const rec = attendanceRecordFor(m.id, attendanceDate, s.seriesId);
+          return { m, status: rec ? recordStatus(rec) : null, note: rec ? (rec.note||'') : '' };
+        });
+        const presentCount = rows.filter(r=>r.status==='present').length;
+        const justifiedCount = rows.filter(r=>r.status==='justified').length;
+        const unjustifiedCount = rows.filter(r=>r.status==='unjustified').length;
+        const allMarked = enrolled.length>0 && rows.every(r=>r.status!==null);
+        return `<div${i<occs.length-1?' style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border);"':''}>
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
+            <div><strong>${s.startTime}–${s.endTime}</strong> — ${escapeHtml(s.className)} ${categoryBadge(s.category)}
+              <span class="subtle">(${presentCount} παρόντες${justifiedCount?`, ${justifiedCount} δικαιολ. απουσία`:''}${unjustifiedCount?`, ${unjustifiedCount} αδικαιολ. απουσία`:''} / ${enrolled.length})</span>
+            </div>
+            ${enrolled.length===0 ? '' :
+              `<button class="btn ${allMarked?'secondary':''} small" onclick="markClassPresent('${s.seriesId}')" ${allMarked?'disabled':''}>✓ Σήμανση Υπολοίπων ως Παρόντες</button>`}
+          </div>
+          ${enrolled.length===0 ? '<div class="subtle">Κανείς δεν έχει κλείσει θέση.</div>' :
+            rows.map(r=>`
+              <div class="roster-row">
+                <div>
+                  <div>${escapeHtml(r.m.name)}</div>
+                  ${r.note?`<div class="note-chip" onclick="openAttendanceNoteModal('${r.m.id}','${s.seriesId}')" title="Επεξεργασία σημείωσης">💬 ${escapeHtml(r.note)}</div>`:''}
+                </div>
+                <div class="status-seg">
+                  <button class="${r.status==='present'?'sel-ok':''}" onclick="setClassStatus('${r.m.id}','${s.seriesId}','present')">${STATUS_META.present.short}</button>
+                  <button class="${r.status==='justified'?'sel-warn':''}" onclick="setClassStatus('${r.m.id}','${s.seriesId}','justified')">${STATUS_META.justified.short}</button>
+                  <button class="${r.status==='unjustified'?'sel-danger':''}" onclick="setClassStatus('${r.m.id}','${s.seriesId}','unjustified')">${STATUS_META.unjustified.short}</button>
+                  <button class="icon-btn" style="padding:5px 7px;font-size:13px;${r.status===null?'opacity:.35;':''}" onclick="openAttendanceNoteModal('${r.m.id}','${s.seriesId}')" title="${r.status===null?'Ορίστε πρώτα κατάσταση παρουσίας':'Προσθήκη/επεξεργασία σημείωσης'}">📝</button>
+                </div>
+              </div>
+            `).join('')}
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+/* Quick per-visit note (e.g. why an absence was justified), kept separate
+   from status changes so it can be added/edited without re-clicking a status
+   button. Requires a status to already be set, since the note lives on the
+   attendance record. */
+function openAttendanceNoteModal(memberId, slotId){
+  const rec = attendanceRecordFor(memberId, attendanceDate, slotId);
+  if(!rec){ alert('Ορίστε πρώτα κατάσταση παρουσίας (Παρουσία / Δικαιολ. / Αδικαιολ. Απουσία).'); return; }
+  const meta = STATUS_META[recordStatus(rec)];
+  openModal(`
+    <h3>Σημείωση Παρουσίας</h3>
+    <div class="subtle" style="margin-bottom:14px;">
+      <strong style="color:var(--text);font-size:15px;">${escapeHtml(memberName(memberId))}</strong><br>
+      ${formatDate(attendanceDate)} · <span class="badge ${meta.cls}">${meta.label}</span>
+    </div>
+    <label>Σημείωση</label>
+    <textarea id="f-att-note" rows="4" placeholder="π.χ. λόγος απουσίας...">${escapeHtml(rec.note||'')}</textarea>
+    <div class="modal-actions">
+      ${rec.note ? `<button class="btn danger" style="margin-right:auto;" onclick="clearAttendanceNote('${memberId}','${slotId}')">Διαγραφή Σημείωσης</button>` : ''}
+      <button class="btn secondary" onclick="closeModal()">Ακύρωση</button>
+      <button class="btn" onclick="saveAttendanceNote('${memberId}','${slotId}')">Αποθήκευση</button>
+    </div>
+  `);
+}
+function saveAttendanceNote(memberId, slotId){
+  const rec = attendanceRecordFor(memberId, attendanceDate, slotId);
+  if(!rec) { closeModal(); return; }
+  rec.note = document.getElementById('f-att-note').value.trim();
+  saveData();
+  closeModal();
+  render();
+}
+function clearAttendanceNote(memberId, slotId){
+  const rec = attendanceRecordFor(memberId, attendanceDate, slotId);
+  if(!rec) { closeModal(); return; }
+  rec.note = '';
+  saveData();
+  closeModal();
+  render();
+}
+function setClassStatus(memberId, slotId, status){
+  const existing = attendanceRecordFor(memberId, attendanceDate, slotId);
+  if(existing && recordStatus(existing) === status){
+    data.attendance = data.attendance.filter(a=>a!==existing); // clicking the active status again clears it
+  } else if(existing){
+    existing.status = status;
+  } else {
+    /* Category is stamped on the record at creation so later slot/override
+       edits or deletions can't retroactively change what this visit consumed. */
+    data.attendance.push({id: uid(), memberId, date: attendanceDate, slotId, status, category: occurrenceCategoryOn(slotId, attendanceDate)});
+  }
+  saveData();
+  render();
+}
+function markClassPresent(slotId){
+  /* Only fills in members with NO status set yet — never overwrites an
+     already-recorded justified/unjustified absence or an existing present mark. */
+  const s = data.schedule.find(x=>x.id===slotId);
+  if(!s) return;
+  const category = occurrenceCategoryOn(slotId, attendanceDate) || CLASS_CATEGORIES[0];
+  /* The occurrence's EFFECTIVE roster for this date — per-date membership
+     overrides included — not the series' base list. */
+  const occ = occurrenceForSeriesOnDate(s, attendanceDate);
+  (occ ? occ.memberIds : s.memberIds).forEach(mid=>{
+    /* Only real members — a roster id with no member record (stale data)
+       must not turn into a ghost attendance record. */
+    if(!data.members.some(m => m.id === mid)) return;
+    if(!attendanceRecordFor(mid, attendanceDate, slotId)){
+      data.attendance.push({id: uid(), memberId: mid, date: attendanceDate, slotId, status: 'present', category});
+    }
+  });
+  saveData();
+  render();
+}
+/* ---------------- Payments ---------------- */
+let paymentSearch = '';
+/* Renders a list of {month, category, count, amount, classes} rows as a
+   table grouped by month first (one bold subtotal header row per month),
+   then broken down by category underneath — instead of repeating the same
+   month text on every row, which got noisy once there was more than one
+   category per month. */
+function renderMonthGroupedTable(rows, emptyMessage){
+  if(rows.length===0) return `<div class="empty">${emptyMessage}</div>`;
+  const byMonth = {};
+  rows.forEach(r => { (byMonth[r.month] = byMonth[r.month] || []).push(r); });
+  const months = Object.keys(byMonth).sort((a,b) => b.localeCompare(a));
+  return `<div class="table-scroll"><table>
+    <thead><tr><th>Κατηγορία</th><th>Πληρωμές</th><th>Σύνολο Ποσού</th><th>Μαθήματα</th></tr></thead>
+    <tbody>
+      ${months.map(month => {
+        const catRows = byMonth[month].slice().sort((a,b) => a.category.localeCompare(b.category, 'el'));
+        const totalCount = catRows.reduce((s,r) => s + r.count, 0);
+        const totalAmount = catRows.reduce((s,r) => s + r.amount, 0);
+        const totalClasses = catRows.reduce((s,r) => s + r.classes, 0);
+        return `
+          <tr class="month-group-row"><td colspan="4">${monthLabel(month)} — Σύνολο: €${totalAmount.toFixed(2)} (${totalCount} πληρωμ${totalCount===1?'ή':'ές'}, ${totalClasses} μαθήματα)</td></tr>
+          ${catRows.map(r => `<tr>
+            <td class="indent">${categoryBadge(r.category)}</td>
+            <td>${r.count}</td>
+            <td>€${r.amount.toFixed(2)}</td>
+            <td>${r.classes}</td>
+          </tr>`).join('')}
+        `;
+      }).join('')}
+    </tbody>
+  </table></div>`;
+}
+function renderPaymentsByMonthCard(){
+  const { rows, pendingCount, pendingAmount, unusedCount, unusedAmount } = paymentsByValidMonth();
+  return `
+    <div class="card">
+      <div class="section-title">Πληρωμές ανά Μήνα Ισχύος</div>
+      <div class="subtle" style="margin-bottom:8px;">Εδώ οι πληρωμές ομαδοποιούνται στον μήνα που πραγματικά άρχισαν να ισχύουν (πότε "χρησιμοποιήθηκαν"), όχι στον μήνα που πληρώθηκαν — έτσι βλέπετε πότε πραγματικά αποδόθηκε η αξία κάθε πληρωμής.</div>
+      ${renderMonthGroupedTable(rows, 'Καμία ενεργοποιημένη πληρωμή ακόμα.')}
+      ${unusedCount>0 ? `<div class="subtle" style="margin-top:10px;">+ ${unusedCount} πληρωμ${unusedCount===1?'ή':'ές'} (€${unusedAmount.toFixed(2)}) ${unusedCount===1?'έχει':'έχουν'} πληρωθεί αλλά το μέλος δεν έχει παρευρεθεί ακόμα σε κανένα μάθημα από αυτή — στο Ιστορικό Πληρωμών παρακάτω εμφανίζεται ως «Δεν έχει χρησιμοποιηθεί ακόμα».</div>` : ''}
+      ${pendingCount>0 ? `<div class="subtle" style="margin-top:6px;">+ ${pendingCount} πληρωμ${pendingCount===1?'ή':'ές'} (€${pendingAmount.toFixed(2)}) ${pendingCount===1?'περιμένει':'περιμένουν'} να εξαντληθεί ένα προηγούμενο πακέτο πριν ενεργοποιηθ${pendingCount===1?'εί':'ούν'} — στο Ιστορικό Πληρωμών παρακάτω εμφανίζεται ως «Εκκρεμεί».</div>` : ''}
+    </div>
+  `;
+}
+function renderPaymentsByPayMonthCard(){
+  const rows = paymentsByPayMonth();
+  return `
+    <div class="card">
+      <div class="section-title">Πληρωμές ανά Μήνα Πληρωμής</div>
+      <div class="subtle" style="margin-bottom:8px;">Εδώ οι πληρωμές ομαδοποιούνται στον μήνα που πράγματι πληρώθηκαν — πόσα χρήματα μπήκαν ταμείο κάθε μήνα, ανεξάρτητα από το πότε άρχισε να ισχύει κάθε πακέτο.</div>
+      ${renderMonthGroupedTable(rows, 'Δεν έχουν καταγραφεί πληρωμές ακόμα.')}
+    </div>
+  `;
+}
+/* A payment tagged as "απόδειξη" (receipt) marks that a receipt was issued
+   for it. Payments saved before this feature existed have no `receipt`
+   field — strictly checking === true keeps them untagged rather than
+   guessing, since there's no way to know if a receipt was actually issued. */
+function isReceipt(p){ return p.receipt === true; }
+function togglePaymentReceipt(id){
+  const p = data.payments.find(x=>x.id===id);
+  if(!p) return;
+  p.receipt = !isReceipt(p);
+  saveData();
+  render();
+}
+/* Grouped the same way as paymentsByValidMonth() (by the month the package
+   actually became active/used, not the month it was paid) but restricted to
+   receipt-tagged payments — this is the view used to check "which payments
+   have I issued a receipt for". A tagged payment with no valid month yet
+   (pending behind an older package, or paid but not yet used) is reported
+   as a separate count instead of guessed into a month. */
+function receiptsByMonth(){
+  const groups = {};
+  let pendingCount = 0, pendingAmount = 0;
+  let unusedCount = 0, unusedAmount = 0;
+  data.payments.filter(isReceipt).forEach(p => {
+    const cat = p.category || CLASS_CATEGORIES[0];
+    const info = paymentEffectiveInfo(p);
+    if(info.state === 'pending'){
+      pendingCount++; pendingAmount += Number(p.amount);
+      return;
+    }
+    if(info.state === 'unused'){
+      unusedCount++; unusedAmount += Number(p.amount);
+      return;
+    }
+    const month = info.date.slice(0,7);
+    const key = month + '|' + cat;
+    if(!groups[key]) groups[key] = { month, category: cat, count: 0, amount: 0, classes: 0 };
+    groups[key].count++;
+    groups[key].amount += Number(p.amount);
+    groups[key].classes += Number(p.classes || 0);
+  });
+  const rows = Object.values(groups).sort((a,b) => b.month.localeCompare(a.month) || a.category.localeCompare(b.category));
+  return { rows, pendingCount, pendingAmount, unusedCount, unusedAmount };
+}
+function renderReceiptsCard(){
+  const tagged = data.payments.filter(isReceipt);
+  const totalAmount = tagged.reduce((s,p)=> s + Number(p.amount), 0);
+  const { rows, pendingCount, pendingAmount, unusedCount, unusedAmount } = receiptsByMonth();
+  return `
+    <div class="card">
+      <div class="section-title">Αποδείξεις (${tagged.length} · €${totalAmount.toFixed(2)})</div>
+      <div class="subtle" style="margin-bottom:8px;">Πληρωμές που έχουν επισημανθεί ως απόδειξη, ομαδοποιημένες στον μήνα που πραγματικά άρχισαν να ισχύουν (όχι στον μήνα πληρωμής).</div>
+      ${renderMonthGroupedTable(rows, 'Καμία πληρωμή δεν έχει επισημανθεί ως απόδειξη ακόμα.')}
+      ${unusedCount>0 ? `<div class="subtle" style="margin-top:10px;">+ ${unusedCount} απόδειξ${unusedCount===1?'η':'εις'} (€${unusedAmount.toFixed(2)}) ${unusedCount===1?'έχει':'έχουν'} πληρωθεί αλλά δεν έχει καταγραφεί ακόμα καμία παρουσία από αυτή.</div>` : ''}
+      ${pendingCount>0 ? `<div class="subtle" style="margin-top:6px;">+ ${pendingCount} απόδειξ${pendingCount===1?'η':'εις'} (€${pendingAmount.toFixed(2)}) ${pendingCount===1?'περιμένει':'περιμένουν'} να εξαντληθεί ένα προηγούμενο πακέτο πριν ενεργοποιηθ${pendingCount===1?'εί':'ούν'}.</div>` : ''}
+    </div>
+  `;
+}
+function renderPayments(){
+  const allPayments = [...data.payments]
+    .filter(p => searchKey(memberName(p.memberId)).includes(searchKey(paymentSearch)))
+    .sort((a,b)=> a.date < b.date ? 1 : -1);
+  const receiptCount = data.payments.filter(isReceipt).length;
+
+  return `
+    <h2 class="page-title">Πληρωμές</h2>
+    <div class="grid">
+      <div class="stat"><div class="num">${data.payments.length}</div><div class="label">Σύνολο Καταγεγραμμένων Πληρωμών</div></div>
+      <div class="stat"><div class="num">${receiptCount}</div><div class="label">Με Απόδειξη</div></div>
+    </div>
+    <div class="toolbar">
+      <div></div>
+      <button class="btn" onclick="openPaymentForm()">+ Καταγραφή Πληρωμής</button>
+    </div>
+
+    ${renderPaymentsByPayMonthCard()}
+    ${renderPaymentsByMonthCard()}
+    ${renderReceiptsCard()}
+
+    <div class="card">
+      <div class="toolbar">
+        <div class="section-title" style="margin:0;">Ιστορικό Πληρωμών</div>
+        <input class="search" id="payment-search-input" placeholder="Αναζήτηση μέλους..." value="${escapeHtml(paymentSearch)}" oninput="paymentSearch=this.value; render();">
+      </div>
+      ${allPayments.length===0 ? '<div class="empty">Δεν έχουν καταγραφεί πληρωμές ακόμα.</div>' :
+      `<div class="subtle" style="margin-bottom:8px;">«Ισχύει από» = η πραγματική ημέρα που άρχισε να χρησιμοποιείται αυτή η πληρωμή. Ένα (*) σημαίνει ότι κάλυψε παρουσίες που έγιναν πριν πληρωθεί. «Εκκρεμεί» σημαίνει ότι θα ενεργοποιηθεί μόλις εξαντληθεί το προηγούμενο πακέτο. «Δεν έχει χρησιμοποιηθεί ακόμα» σημαίνει ότι είναι ήδη το ενεργό πακέτο, απλώς δεν έχει καταγραφεί καμία παρουσία από αυτό ακόμα.</div>
+      <div class="table-scroll"><table>
+        <thead><tr><th>Ημερομηνία</th><th>Μέλος</th><th>Ποσό</th><th>Τρόπος</th><th>Κατηγορία</th><th>Μαθήματα</th><th>Ισχύει Από</th><th>Απόδειξη</th><th></th></tr></thead>
+        <tbody>
+          ${allPayments.map(p=>{
+            const info = paymentEffectiveInfo(p);
+            const effectText = info.state==='active' ? formatDate(info.date) + (info.backdated ? ' *' : '') :
+              info.state==='pending' ? 'Εκκρεμεί' : 'Δεν έχει χρησιμοποιηθεί ακόμα';
+            return `<tr>
+            <td>${formatDate(p.date)}</td>
+            <td>${escapeHtml(memberName(p.memberId))}${p.note?` <span title="${escapeHtml(p.note)}" style="cursor:help;">💬</span>`:''}</td>
+            <td>€${Number(p.amount).toFixed(2)}</td>
+            <td>${escapeHtml(p.method)}</td>
+            <td>${categoryBadge(p.category)}</td>
+            <td>${p.classes||0}</td>
+            <td>${effectText}</td>
+            <td style="text-align:center;"><input type="checkbox" style="width:auto;" ${isReceipt(p)?'checked':''} onchange="togglePaymentReceipt('${p.id}')" title="Επισήμανση ως απόδειξη"></td>
+            <td><button class="icon-btn" onclick="deletePayment('${p.id}')">✕</button></td>
+          </tr>`;
+          }).join('')}
+        </tbody>
+      </table></div>`}
+    </div>
+  `;
+}
+function openPaymentForm(memberId, category){
+  if(data.members.length===0){ alert('Προσθέστε πρώτα ένα μέλος.'); return; }
+  openModal(`
+    <h3>Καταγραφή Πληρωμής</h3>
+    <label>Μέλος</label>
+    ${memberAutocompleteHtml('f-member', data.members, memberId)}
+    <div class="form-row">
+      <div>
+        <label>Ημερομηνία</label>
+        ${dateFieldHtml('f-date', todayStr())}
+      </div>
+      <div>
+        <label>Ποσό (€)</label>
+        <input id="f-amount" type="number" min="0" step="0.01" placeholder="50.00">
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Τρόπος Πληρωμής</label>
+        <select id="f-method">
+          <option value="" selected disabled>Επιλέξτε...</option>
+          <option>Μετρητά</option><option>Κάρτα</option><option>Τραπεζικό Έμβασμα</option><option>Άλλο</option>
+        </select>
+      </div>
+      <div>
+        <label>Αριθμός Μαθημάτων</label>
+        <input id="f-classes" type="number" min="1" placeholder="10">
+      </div>
+    </div>
+    <label>Κατηγορία Μαθημάτων</label>
+    <select id="f-category">
+      <option value="" ${category?'':'selected'} disabled>Επιλέξτε...</option>
+      ${CLASS_CATEGORIES.map(c=>`<option value="${c}" ${c===category?'selected':''}>${c}</option>`).join('')}
+    </select>
+    <label>Σημείωση (προαιρετικό)</label>
+    <input id="f-note" placeholder="">
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Ακύρωση</button>
+      <button class="btn" onclick="savePayment()">Αποθήκευση</button>
+    </div>
+  `);
+}
+function savePayment(){
+  const memberId = document.getElementById('f-member').value;
+  if(!memberId){ alert('Παρακαλώ επιλέξτε ένα μέλος από τη λίστα.'); return; }
+  const amount = parseFloat(document.getElementById('f-amount').value);
+  if(!amount || amount <= 0){ alert('Παρακαλώ εισάγετε ένα έγκυρο ποσό.'); return; }
+  const classes = parseInt(document.getElementById('f-classes').value);
+  if(!classes || classes <= 0){ alert('Παρακαλώ εισάγετε έγκυρο αριθμό μαθημάτων.'); return; }
+  const method = document.getElementById('f-method').value;
+  if(!method){ alert('Παρακαλώ επιλέξτε τρόπο πληρωμής.'); return; }
+  const category = document.getElementById('f-category').value;
+  if(!category){ alert('Παρακαλώ επιλέξτε κατηγορία μαθημάτων.'); return; }
+  data.payments.push({
+    id: uid(),
+    memberId,
+    date: document.getElementById('f-date').value || todayStr(),
+    amount,
+    method,
+    classes,
+    category,
+    note: document.getElementById('f-note').value.trim(),
+  });
+  saveData();
+  closeModal();
+  render();
+}
+function deletePayment(id){
+  if(!confirm('Διαγραφή αυτής της πληρωμής;')) return;
+  data.payments = data.payments.filter(p=>p.id!==id);
+  saveData();
+  render();
+}
+
+/* ---------------- Weekly Notes ---------------- */
+function mondayOf(dateStr){
+  const d = new Date(dateStr + 'T00:00:00');
+  const dow = d.getDay(); // 0=Sun..6=Sat
+  const diff = dow === 0 ? -6 : 1 - dow;
+  d.setDate(d.getDate() + diff);
+  return localDateStr(d);
+}
+function addDaysLocalStr(dateStr, delta){
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + delta);
+  return localDateStr(d);
+}
+/* Session-only UI state: which weeks the user has manually expanded/collapsed,
+   overriding the default (current week + any unreviewed week start expanded;
+   already-reviewed past weeks start collapsed). This is what keeps the Notes
+   page navigable once dozens/hundreds of weeks pile up — collapsed weeks are
+   just a one-line header, and past weeks scroll in their own capped box
+   instead of pushing the page taller forever. */
+let weekExpandOverride = {};
+function isWeekExpanded(wk, isCurrent, reviewed){
+  if(wk in weekExpandOverride) return weekExpandOverride[wk];
+  return isCurrent || !reviewed;
+}
+function toggleWeekExpanded(wk, isCurrent, reviewed){
+  weekExpandOverride[wk] = !isWeekExpanded(wk, isCurrent, reviewed);
+  render();
+}
+/* A recurring note has no separate record per week — it's the same note
+   shown again in every week's card from its origin weekKey onward (its own
+   origin week already gets it via the plain weekKey grouping, so only
+   STRICTLY earlier recurring notes need to be added in here to avoid
+   listing it twice in its own origin week). */
+function notesForWeek(wk, grouped){
+  const own = grouped[wk] || [];
+  const recurringFromEarlier = data.notes.filter(n => n.recurring && n.weekKey < wk);
+  return own.concat(recurringFromEarlier);
+}
+/* The classes that exist "now": one entry per class, represented by the
+   segment active today (or the earliest upcoming one). Segments that already
+   ended — left behind by "this and following" splits — are history and would
+   otherwise list the same class once per split. */
+function currentClassSeries(){
+  const today = todayStr();
+  const seen = {};
+  return data.schedule
+    .filter(s => !s.validUntil || s.validUntil >= today)
+    .sort((a,b) => (a.validFrom||'') < (b.validFrom||'') ? -1 : 1)
+    .filter(s => {
+      const k = [s.day, s.startTime, s.endTime, s.className, s.category].join('|');
+      if(seen[k]) return false;
+      seen[k] = true;
+      return true;
+    })
+    .sort((a,b)=> DAYS.indexOf(a.day)-DAYS.indexOf(b.day) || a.startTime.localeCompare(b.startTime));
+}
+/* Label for one schedule series as used in the note's class picker and badge —
+   day/time included since the same class name can recur on several days. */
+function scheduleSeriesLabel(s){
+  return `${escapeHtml(s.className)} · ${DAY_SHORT[s.day]} ${s.startTime}–${s.endTime}`;
+}
+function noteMemberBadge(n){
+  if(!n.memberId) return '';
+  return `<span class="badge muted">👤 ${escapeHtml(memberName(n.memberId))}</span>`;
+}
+function noteClassBadge(n){
+  if(!n.classId) return '';
+  const s = data.schedule.find(x => x.id === n.classId);
+  return s
+    ? `<span class="badge muted" style="color:${classNameColor(s.className)};">🏷️ ${scheduleSeriesLabel(s)}</span>`
+    : `<span class="badge muted">🏷️ (διαγραμμένο μάθημα)</span>`;
+}
+/* A note is reviewed independently per week it appears in — see the
+   reviewedNotes comment in normalizeData(). A recurring note thus needs a
+   fresh checkmark every week; a one-time note only ever has one. */
+function noteReviewKey(noteId, wk){ return noteId + '__' + wk; }
+function isNoteReviewed(noteId, wk){ return data.reviewedNotes.includes(noteReviewKey(noteId, wk)); }
+function renderNoteWeekCard(wk, notes, isCurrent){
+  const weekEnd = addDaysLocalStr(wk, 6);
+  const allReviewed = notes.length > 0 && notes.every(n => isNoteReviewed(n.id, wk));
+  const expanded = isWeekExpanded(wk, isCurrent, allReviewed);
+  return `
+    <div class="card note-card${isCurrent?' week-current':''}">
+      <div class="toolbar">
+        <div class="section-title" style="margin:0;cursor:pointer;" onclick="toggleWeekExpanded('${wk}', ${isCurrent}, ${allReviewed})">
+          ${expanded ? '▾' : '▸'} ${isCurrent ? '📌 Τρέχουσα Εβδομάδα' : 'Εβδομάδα'} (${formatDate(wk)} – ${formatDate(weekEnd)})
+          <span class="badge muted">${notes.length} σημείωσ${notes.length===1?'η':'εις'}</span>
+        </div>
+        ${notes.length===0 ? '' : `<button class="btn ${allReviewed ? 'secondary' : ''} small" onclick="toggleAllNotesReviewed('${wk}', [${notes.map(n=>`'${n.id}'`).join(',')}])">${allReviewed ? '✓ Όλες Ελεγμένες' : 'Σήμανση Όλων ως Ελεγμένων'}</button>`}
+      </div>
+      ${!expanded ? '' :
+        notes.length===0 ? '<div class="empty">Καμία σημείωση αυτή την εβδομάδα.</div>' :
+        notes.map(n => { const nReviewed = isNoteReviewed(n.id, wk); return `<div class="note-entry${nReviewed?' reviewed':''}">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+              <input type="checkbox" ${nReviewed?'checked':''} onchange="toggleNoteReviewed('${n.id}','${wk}')" title="Σήμανση ως ελεγμένη">
+              <span class="subtle">${formatDate(n.date)}</span>
+            </label>
+            <span style="display:flex;gap:2px;">
+              <button class="icon-btn" style="${n.recurring?'color:var(--primary);':'opacity:.4;'}" onclick="toggleNoteRecurring('${n.id}')" title="${n.recurring?'Επαναλαμβανόμενη — πατήστε για απενεργοποίηση (η σημείωση παραμένει)':'Μόνο αυτή την εβδομάδα — πατήστε για να γίνει επαναλαμβανόμενη'}">🔁</button>
+              <button class="icon-btn" onclick="deleteNote('${n.id}')" title="Διαγραφή">✕</button>
+            </span>
+          </div>
+          <div style="margin-top:4px;${nReviewed?'opacity:.55;':''}">${escapeHtml(n.text)}</div>
+          ${(n.memberId || n.classId) ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">${noteMemberBadge(n)}${noteClassBadge(n)}</div>` : ''}
+        </div>`; }).join('')}
+    </div>
+  `;
+}
+/* Every Monday from startWk to endWk (inclusive), both already weekKeys. */
+function weeksBetween(startWk, endWk){
+  const weeks = [];
+  for(let wk = startWk; wk <= endWk; wk = addDaysLocalStr(wk, 7)) weeks.push(wk);
+  return weeks;
+}
+function renderNotes(){
+  const currentWeekKey = mondayOf(todayStr());
+  const grouped = {};
+  data.notes.forEach(n => { (grouped[n.weekKey] = grouped[n.weekKey] || []).push(n); });
+  if(!grouped[currentWeekKey]) grouped[currentWeekKey] = [];
+  /* A recurring note must get its own card (and reviewed-checkbox) in EVERY
+     week it's active in — not just weeks that happen to also have their own
+     notes — otherwise it silently vanishes from in-between weeks with
+     nothing else written, even though it's supposed to recur every week. */
+  data.notes.filter(n => n.recurring).forEach(n => {
+    weeksBetween(n.weekKey, currentWeekKey).forEach(wk => { if(!grouped[wk]) grouped[wk] = []; });
+  });
+  const weekKeys = Object.keys(grouped).sort((a,b) => a < b ? 1 : -1);
+  const pastWeekKeys = weekKeys.filter(wk => wk !== currentWeekKey);
+
+  return `
+    <h2 class="page-title">Σημειώσεις</h2>
+    <div class="subtle" style="margin-bottom:14px;">Γράψτε σημειώσεις κατά τη διάρκεια της εβδομάδας. Κάθε Σάββατο, όταν ανοίγετε την εφαρμογή, θα εμφανίζεται υπενθύμιση αν έχετε σημειώσεις από αυτή την εβδομάδα που δεν έχετε ελέγξει ακόμα. Μια σημείωση μπορεί να είναι είτε μόνο για την τρέχουσα εβδομάδα, είτε επαναλαμβανόμενη ώστε να εμφανίζεται σε κάθε επόμενη εβδομάδα — πατήστε το 🔁 δίπλα σε μια σημείωση για να ενεργοποιήσετε/απενεργοποιήσετε την επανάληψη ανά πάσα στιγμή, χωρίς να τη διαγράψετε.</div>
+
+    <div class="card">
+      <div class="section-title">✏️ Νέα Σημείωση (Τρέχουσα Εβδομάδα)</div>
+      <textarea id="f-note-text" rows="3" placeholder="Γράψτε μια σημείωση..." oninput="syncNoteDraft()">${escapeHtml(noteDraft.text)}</textarea>
+
+      <label>Εμβέλεια</label>
+      <div class="scope-seg">
+        <label class="scope-option${noteDraft.scope==='week'?' checked':''}">
+          <input type="radio" name="f-note-scope" value="week" ${noteDraft.scope==='week'?'checked':''} onchange="updateScopeSeg(this); syncNoteDraft();"> Μόνο αυτή την εβδομάδα
+        </label>
+        <label class="scope-option${noteDraft.scope==='recurring'?' checked':''}">
+          <input type="radio" name="f-note-scope" value="recurring" ${noteDraft.scope==='recurring'?'checked':''} onchange="updateScopeSeg(this); syncNoteDraft();"> 🔁 Κάθε εβδομάδα, μέχρι να τη διαγράψω
+        </label>
+      </div>
+
+      <label>🏷️ Ετικέτες (προαιρετικό)</label>
+      <div class="form-row">
+        <div><div onfocusout="syncNoteDraft()">${memberAutocompleteHtml('f-note-member', data.members, noteDraft.memberId || null, '👤 Αναζήτηση μέλους...')}</div></div>
+        <div>
+          <select id="f-note-class" onchange="syncNoteDraft()">
+            <option value="">— Χωρίς μάθημα —</option>
+            ${currentClassSeries().map(s=>`<option value="${s.id}" ${s.id===noteDraft.classId?'selected':''}>${DAY_SHORT[s.day]} ${s.startTime}–${s.endTime} — ${escapeHtml(s.className)} (${escapeHtml(s.category)})</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div style="margin-top:14px;"><button class="btn" onclick="addNote()">+ Προσθήκη Σημείωσης</button></div>
+    </div>
+
+    ${renderNoteWeekCard(currentWeekKey, notesForWeek(currentWeekKey, grouped).slice().sort((a,b) => a.date < b.date ? 1 : -1), true)}
+
+    ${pastWeekKeys.length===0 ? '' : `
+      <div class="subtle" style="margin:14px 0 6px;">Προηγούμενες Εβδομάδες (${pastWeekKeys.length})</div>
+      <div class="table-scroll" style="max-height:480px;">
+        ${pastWeekKeys.map(wk => renderNoteWeekCard(wk, notesForWeek(wk, grouped).slice().sort((a,b) => a.date < b.date ? 1 : -1), false)).join('')}
+      </div>
+    `}
+  `;
+}
+/* Purely visual: highlights whichever scope option's radio is selected. Done
+   as a targeted class toggle (not a full render()) so typing in the note
+   textarea above isn't interrupted/cleared by a rebuild on every click. */
+function updateScopeSeg(radio){
+  const container = radio.closest('.scope-seg');
+  if(!container) return;
+  container.querySelectorAll('.scope-option').forEach(opt => opt.classList.remove('checked'));
+  radio.closest('.scope-option').classList.add('checked');
+}
+/* The new-note form lives inside #content, which every render() rebuilds —
+   so the draft is mirrored into this object on each input and rendered back
+   from it, instead of being lost the moment any button on the page is clicked. */
+let noteDraft = { text: '', scope: 'week', memberId: '', classId: '' };
+function syncNoteDraft(){
+  const t = document.getElementById('f-note-text');
+  const sc = document.querySelector('input[name="f-note-scope"]:checked');
+  const mem = document.getElementById('f-note-member');
+  const cls = document.getElementById('f-note-class');
+  if(t) noteDraft.text = t.value;
+  if(sc) noteDraft.scope = sc.value;
+  if(mem) noteDraft.memberId = mem.value;
+  if(cls) noteDraft.classId = cls.value;
+}
+function addNote(){
+  const text = document.getElementById('f-note-text').value.trim();
+  if(!text){ alert('Παρακαλώ γράψτε κάτι.'); return; }
+  const recurring = document.querySelector('input[name="f-note-scope"]:checked').value === 'recurring';
+  const memberId = document.getElementById('f-note-member').value || null;
+  const classId = document.getElementById('f-note-class').value || null;
+  const today = todayStr();
+  data.notes.push({ id: uid(), text, date: today, weekKey: mondayOf(today), recurring, memberId, classId });
+  noteDraft = { text: '', scope: 'week', memberId: '', classId: '' };
+  saveData();
+  render();
+}
+function deleteNote(id){
+  if(!confirm('Διαγραφή αυτής της σημείωσης;')) return;
+  data.notes = data.notes.filter(n => n.id !== id);
+  saveData();
+  render();
+}
+/* Turns recurrence on/off without touching the note's text or history — it
+   stays exactly where it was written (its origin week); only whether it keeps
+   getting carried into later weeks changes. */
+function toggleNoteRecurring(id){
+  const n = data.notes.find(x => x.id === id);
+  if(!n) return;
+  n.recurring = !n.recurring;
+  saveData();
+  render();
+}
+function toggleNoteReviewed(noteId, wk){
+  const key = noteReviewKey(noteId, wk);
+  if(data.reviewedNotes.includes(key)) data.reviewedNotes = data.reviewedNotes.filter(k => k !== key);
+  else data.reviewedNotes.push(key);
+  saveData();
+  render();
+}
+function toggleAllNotesReviewed(wk, noteIds){
+  const allReviewed = noteIds.every(id => isNoteReviewed(id, wk));
+  noteIds.forEach(id => {
+    const key = noteReviewKey(id, wk);
+    const has = data.reviewedNotes.includes(key);
+    if(allReviewed && has) data.reviewedNotes = data.reviewedNotes.filter(k => k !== key);
+    if(!allReviewed && !has) data.reviewedNotes.push(key);
+  });
+  saveData();
+  render();
+}
+
+/* Best-effort Saturday reminder. This can ONLY fire while the app happens to
+   be open in a browser tab — a static local file has no server or background
+   process, so it cannot wake up your computer or phone on its own. Opening
+   the app on (or any time after) a Saturday with unreviewed notes for that
+   week shows this banner; if the browser also grants Notification permission,
+   a real desktop notification is fired too, once per week per session. */
+let desktopNotifShownForWeek = null;
+/* Which single due week the person dismissed the banner for (this session).
+   The banner comes back only if a NEW week becomes due — not on every render. */
+let dismissedReminderKey = null;
+/* Every (note, week) occurrence up through the current week — a one-time
+   note contributes just its own weekKey, a recurring note one per week from
+   its origin through now (mirrors the carryover in renderNotes()). Each
+   occurrence is reviewed independently, so this is what "due" is checked
+   against, not the notes list itself. */
+function noteOccurrences(){
+  const currentWeekKey = mondayOf(todayStr());
+  const occ = [];
+  data.notes.forEach(n => {
+    if(n.recurring) weeksBetween(n.weekKey, currentWeekKey).forEach(wk => occ.push({ id: n.id, weekKey: wk }));
+    else occ.push({ id: n.id, weekKey: n.weekKey });
+  });
+  return occ;
+}
+/* Due weeks are surfaced one at a time (oldest first), not batched into a
+   single "N weeks" message — the person reviews/dismisses one week's notes,
+   then the next due week (if any) appears on the following render. */
+function dueNoteWeeks(){
+  const today = todayStr();
+  /* A week becomes "due" once its Saturday has arrived — and it STAYS due
+     until every note occurrence in it is reviewed, so opening the app on
+     Sunday (or weeks later) still shows the reminder instead of it silently
+     disappearing after Saturday. */
+  return [...new Set(
+    noteOccurrences()
+      .filter(o => !isNoteReviewed(o.id, o.weekKey) && addDaysLocalStr(o.weekKey, 5) <= today)
+      .map(o => o.weekKey)
+  )].sort();
+}
+function checkNotesReminder(){
+  const banner = document.getElementById('notes-reminder');
+  const dueWeeks = dueNoteWeeks();
+  if(dueWeeks.length === 0){ banner.style.display = 'none'; return; }
+  const wk = dueWeeks[0];
+  if(dismissedReminderKey === wk){ banner.style.display = 'none'; return; }
+  const count = noteOccurrences().filter(o => o.weekKey === wk && !isNoteReviewed(o.id, wk)).length;
+  const weekText = `την εβδομάδα ${formatDate(wk)} – ${formatDate(addDaysLocalStr(wk, 6))}`;
+  document.getElementById('notes-reminder-text').textContent =
+    `🔔 Έχετε ${count} σημείωσ${count===1?'η':'εις'} για ανασκόπηση από ${weekText}.`;
+  banner.style.display = 'flex';
+  maybeShowDesktopNotification(count, wk);
+}
+function dismissNotesReminder(){
+  document.getElementById('notes-reminder').style.display = 'none';
+  const dueWeeks = dueNoteWeeks();
+  dismissedReminderKey = dueWeeks.length ? dueWeeks[0] : null;
+}
+function maybeShowDesktopNotification(count, weekKey){
+  if(!('Notification' in window)) return;
+  if(desktopNotifShownForWeek === weekKey) return; // avoid re-firing every render this session
+  desktopNotifShownForWeek = weekKey;
+  const fire = () => new Notification('Ανασκόπηση Σημειώσεων Εβδομάδας', {
+    body: `Έχετε ${count} σημείωσ${count===1?'η':'εις'} για ανασκόπηση.`,
+  });
+  if(Notification.permission === 'granted') fire();
+  else if(Notification.permission !== 'denied') Notification.requestPermission().then(p => { if(p === 'granted') fire(); });
+}
+
+/* ---------------- Backup ---------------- */
+function renderBackup(){
+  return `
+    <h2 class="page-title">Αντίγραφο Ασφαλείας &amp; Επαναφορά</h2>
+
+    <div class="card">
+      <div class="section-title">Ζωντανή Αποθήκευση σε Αρχείο</div>
+      ${!hasFSAccess ? `
+        <div class="subtle">Αυτός ο browser δεν υποστηρίζει την απευθείας αποθήκευση σε αρχείο σε κάθε ενέργεια (αυτή η λειτουργία λειτουργεί προς το παρόν μόνο σε Chrome, Edge, Opera ή Brave). Μην ανησυχείτε — τα δεδομένα σας αποθηκεύονται ακαριαία σε αυτόν τον browser μετά από κάθε ενέργεια. Χρησιμοποιήστε το «Λήψη Αντιγράφου» παρακάτω τακτικά για να διατηρείτε ένα ασφαλές αντίγραφο στον δίσκο.</div>
+      ` : fileHandleStatus === 'connected' ? `
+        <div class="subtle">✅ Η ζωντανή αποθήκευση είναι ενεργή. Κάθε ενέργεια γράφεται απευθείας στο <strong>${escapeHtml(fileHandle?.name || 'το αρχείο σας')}</strong> στον δίσκο, επιπλέον της αποθήκευσης σε αυτόν τον browser.</div>
+        <div style="margin-top:12px;"><button class="btn secondary" onclick="disconnectFile()">Αποσύνδεση Αρχείου</button></div>
+      ` : fileHandleStatus === 'needs-permission' ? `
+        <div class="subtle">⚠️ Αυτός ο browser χρειάζεται να επανασυνδέσετε το αρχείο αποθήκευσής σας (αυτό συμβαίνει σε κάθε νέα περίοδο σύνδεσης του browser για λόγους ασφαλείας). Μέχρι τότε, τα δεδομένα εξακολουθούν να αποθηκεύονται ακαριαία σε αυτόν τον browser — απλώς δεν γράφονται ακόμα στο αρχείο.</div>
+        <div style="margin-top:12px;display:flex;gap:10px;">
+          <button class="btn" onclick="reconnectFile()">Επανασύνδεση</button>
+          <button class="btn secondary" onclick="connectFile()">Επιλογή Άλλου Αρχείου</button>
+        </div>
+      ` : `
+        <div class="subtle">Επιλέξτε ένα αρχείο στον υπολογιστή σας και κάθε ενέργεια (προσθήκη μέλους, καταγραφή παρουσίας, καταγραφή πληρωμής...) θα γράφεται σε αυτό αμέσως — ένα πραγματικό, πάντα ενημερωμένο αρχείο, όχι μόνο αποθήκευση στον browser.</div>
+        <div style="margin-top:12px;"><button class="btn" onclick="connectFile()">🔗 Σύνδεση Αρχείου Αποθήκευσης</button></div>
+      `}
+    </div>
+
+    <div class="card">
+      <div class="section-title">Χώρος Αποθήκευσης στον Browser</div>
+      ${(() => { const u = storageUsage(); return `
+        <div class="subtle">Αυτός ο browser δίνει στην εφαρμογή περίπου ${u.limitMb} MB. Όταν γεμίσει, οι νέες αλλαγές δεν αποθηκεύονται.</div>
+        <div class="storage-meter ${u.level}"><div style="width:${u.pct}%;"></div></div>
+        <div class="subtle"><strong>${u.mb} MB</strong> από ${u.limitMb} MB σε χρήση (${u.pct}%) — ${data.attendance.length} παρουσίες, ${data.payments.length} πληρωμές, ${data.members.length} μέλη</div>
+        ${u.level==='ok' ? '' : `<div class="subtle" style="margin-top:8px;color:var(--${u.level});font-weight:600;">${u.level==='danger' ? '🛑 Σχεδόν γεμάτος. Κατεβάστε αντίγραφο ασφαλείας τώρα.' : '⚠️ Πλησιάζει το όριο. Κατεβάστε αντίγραφο ασφαλείας.'}</div>`}
+      `; })()}
+    </div>
+    <div class="card">
+      <div class="section-title">Χειροκίνητο Αντίγραφο Ασφαλείας</div>
+      <div class="subtle">Όλα τα δεδομένα σας αποθηκεύονται επίσης αυτόματα σε αυτόν τον browser. Αν διαγράψετε τα δεδομένα του browser, αλλάξετε υπολογιστή ή χρησιμοποιήσετε διαφορετικό browser, αυτό το αντίγραφο δεν θα υπάρχει — γι' αυτό είναι καλή ιδέα να κατεβάζετε ένα αντίγραφο ασφαλείας πού και πού.</div>
+      <div style="margin-top:16px;">
+        <button class="btn secondary" onclick="exportData()">⬇ Λήψη Αντιγράφου Ασφαλείας</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section-title">Επαναφορά από Αντίγραφο Ασφαλείας</div>
+      <div class="subtle" style="margin-bottom:10px;">Αυτό θα αντικαταστήσει όλα τα τρέχοντα δεδομένα με τα περιεχόμενα του αρχείου αντιγράφου ασφαλείας.</div>
+      <input type="file" id="import-file" accept="application/json">
+      <div style="margin-top:12px;">
+        <button class="btn secondary" onclick="importData()">Επαναφορά</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section-title">Δοκιμαστικά Δεδομένα</div>
+      <div class="subtle" style="margin-bottom:10px;">Γεμίζει την εφαρμογή με ενδεικτικά μέλη, πρόγραμμα, πληρωμές και παρουσίες, ώστε να δείτε πώς φαίνεται με πραγματικά δεδομένα. <strong>Αντικαθιστά όλα τα τρέχοντα δεδομένα.</strong></div>
+      <button class="btn secondary" onclick="loadSampleData()">📋 Φόρτωση Δοκιμαστικών Δεδομένων</button>
+    </div>
+    <div class="card">
+      <div class="section-title">Διαγραφή Όλων των Δεδομένων</div>
+      <div class="subtle" style="margin-bottom:10px;">Διαγραφή όλων των μελών, του προγράμματος, των παρουσιών και των πληρωμών. Αυτό δεν μπορεί να αναιρεθεί.</div>
+      <button class="btn danger" onclick="resetAll()">Διαγραφή Όλων των Δεδομένων</button>
+    </div>
+  `;
+}
+function exportData(){
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'powerhub-backup-' + todayStr() + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function importData(){
+  const input = document.getElementById('import-file');
+  if(!input.files.length){ alert('Επιλέξτε πρώτα ένα αρχείο αντιγράφου ασφαλείας.'); return; }
+  if(!confirm('Αυτό θα αντικαταστήσει ΟΛΑ τα τρέχοντα δεδομένα με τα περιεχόμενα του αρχείου. Συνέχεια;')) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try{
+      const parsed = JSON.parse(e.target.result);
+      if(!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('bad file');
+      /* A backup must actually contain at least one of the expected sections —
+         otherwise a random JSON file would silently wipe everything. */
+      if(!Object.keys(defaultData()).some(k => Array.isArray(parsed[k]))) throw new Error('bad file');
+      data = normalizeData(parsed);
+      saveData();
+      alert('Τα δεδομένα επαναφέρθηκαν με επιτυχία.');
+      render();
+    }catch(err){
+      alert('Δεν ήταν δυνατή η ανάγνωση αυτού του αρχείου. Παρακαλώ επιλέξτε ένα έγκυρο αρχείο αντιγράφου ασφαλείας.');
+    }
+  };
+  reader.readAsText(input.files[0]);
+}
+function resetAll(){
+  if(!confirm('Αυτό θα διαγράψει οριστικά ΟΛΑ τα δεδομένα. Είστε σίγουρος/η;')) return;
+  if(!confirm('Σίγουρα σίγουρα; Αυτό δεν μπορεί να αναιρεθεί.')) return;
+  data = defaultData();
+  saveData();
+  render();
+}
+
+/* ---------------- Sample data ---------------- */
+function localDateStr(d){
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function daysAgoStr(n){
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return localDateStr(d);
+}
+function buildSampleData(){
+  const member = (name, phone, email, joinAgo, notes) =>
+    ({ id: uid(), name, phone, email, joinDate: daysAgoStr(joinAgo), notes: notes || '' });
+  const members = [
+    member('Μαρία Παπαδοπούλου', '6944123456', 'maria.pap@example.com', 200),
+    member('Γιώργος Νικολάου',   '6955234567', 'giorgos.nik@example.com', 150),
+    member('Ελένη Αντωνίου',      '6966345678', 'eleni.ant@example.com', 120),
+    member('Κώστας Δημητρίου',    '6977456789', 'kostas.dim@example.com', 90),
+    member('Σοφία Βασιλείου',     '6988567890', 'sofia.vas@example.com', 75),
+    member('Νίκος Παπαγιάννης',   '6999678901', 'nikos.pap@example.com', 60),
+    member('Άννα Ιωάννου',        '6944789012', 'anna.ioannou@example.com', 45),
+    member('Δημήτρης Οικονόμου',  '6955890123', 'dimitris.oik@example.com', 30),
+    member('Κατερίνα Στεφανίδη',  '6966901234', 'katerina.stef@example.com', 15),
+    member('Παναγιώτης Μακρής',   '6977012345', 'panagiotis.makris@example.com', 5, 'Νέο μέλος, ενδιαφέρεται για personal training.'),
+  ];
+  const byName = n => members.find(m => m.name === n);
+
+  const slot = (day, start, end, className, category, capacity, memberNames) => ({
+    id: uid(), day, startTime: start, endTime: end, className, category, capacity,
+    memberIds: memberNames.map(n => byName(n).id),
+  });
+  const schedule = [
+    slot('Mon','08:00','09:00','Πρωινό Βάρη','Βάρη',12, ['Μαρία Παπαδοπούλου','Γιώργος Νικολάου','Κώστας Δημητρίου','Νίκος Παπαγιάννης']),
+    slot('Mon','18:00','19:00','Βραδινό Pilates','Πιλάτες',10, ['Ελένη Αντωνίου','Σοφία Βασιλείου','Άννα Ιωάννου']),
+    slot('Tue','09:00','10:00','Λειτουργική Προπόνηση','Βάρη',12, ['Μαρία Παπαδοπούλου','Δημήτρης Οικονόμου','Παναγιώτης Μακρής']),
+    slot('Wed','08:00','09:00','Πρωινό Βάρη','Βάρη',12, ['Γιώργος Νικολάου','Κώστας Δημητρίου','Κατερίνα Στεφανίδη']),
+    slot('Wed','18:00','19:00','Pilates Mat','Πιλάτες',10, ['Ελένη Αντωνίου','Άννα Ιωάννου','Σοφία Βασιλείου']),
+    slot('Thu','19:00','20:00','CrossTraining','Βάρη',15, ['Νίκος Παπαγιάννης','Παναγιώτης Μακρής','Μαρία Παπαδοπούλου']),
+    slot('Fri','09:00','10:00','Pilates Reformer','Πιλάτες',8, ['Σοφία Βασιλείου','Κατερίνα Στεφανίδη']),
+    slot('Sat','10:00','11:00','Σαββατιάτικο Βάρη','Βάρη',12, ['Κώστας Δημητρίου','Δημήτρης Οικονόμου','Γιώργος Νικολάου']),
+  ];
+
+  const payment = (name, ago, amount, method, classes, category) => ({
+    id: uid(), memberId: byName(name).id, date: daysAgoStr(ago), amount, method, classes, category, note: '',
+  });
+  const payments = [
+    payment('Μαρία Παπαδοπούλου', 60, 50, 'Μετρητά', 10, 'Βάρη'),
+    payment('Μαρία Παπαδοπούλου', 20, 40, 'Κάρτα', 5, 'Πιλάτες'),
+    payment('Γιώργος Νικολάου', 45, 50, 'Μετρητά', 10, 'Βάρη'),
+    // Renewed early, while the package above still has classes left —
+    // demonstrates the "Εκκρεμεί" (pending) state: queued behind an older
+    // package that hasn't run out yet.
+    payment('Γιώργος Νικολάου', 15, 50, 'Κάρτα', 10, 'Βάρη'),
+    payment('Ελένη Αντωνίου', 80, 15, 'Μετρητά', 3, 'Βάρη'),
+    payment('Ελένη Αντωνίου', 30, 60, 'Κάρτα', 10, 'Πιλάτες'),
+    payment('Κώστας Δημητρίου', 50, 50, 'Τραπεζικό Έμβασμα', 10, 'Βάρη'),
+    payment('Σοφία Βασιλείου', 40, 60, 'Κάρτα', 10, 'Πιλάτες'),
+    // Same idea for Πιλάτες: bought again well before the first package emptied.
+    payment('Σοφία Βασιλείου', 12, 30, 'Μετρητά', 5, 'Πιλάτες'),
+    payment('Νίκος Παπαγιάννης', 35, 25, 'Μετρητά', 5, 'Βάρη'),
+    payment('Άννα Ιωάννου', 25, 50, 'Κάρτα', 10, 'Βάρη'),
+    payment('Άννα Ιωάννου', 25, 60, 'Κάρτα', 10, 'Πιλάτες'),
+    payment('Δημήτρης Οικονόμου', 15, 10, 'Μετρητά', 2, 'Βάρη'),
+    payment('Παναγιώτης Μακρής', 4, 50, 'Κάρτα', 10, 'Βάρη'),
+    // Κατερίνα Στεφανίδη deliberately has no payments — demonstrates the "Καμία πληρωμή" state.
+  ];
+
+  // Attendance for the last two weeks, generated to match each slot's real
+  // weekday so the data is internally consistent (a Monday class only ever
+  // gets attendance records dated on an actual Monday), including today.
+  const attendance = [];
+  for(let offset = 13; offset >= 0; offset--){
+    const d = new Date(); d.setDate(d.getDate() - offset);
+    const dateStr = localDateStr(d);
+    const dayCode = dayAbbrev(dateStr);
+    schedule.filter(s => s.day === dayCode).forEach(s => {
+      s.memberIds.forEach((mid, idx) => {
+        const roll = (offset + idx) % 5;
+        let status = null;
+        if(roll === 0) status = 'unjustified';
+        else if(roll === 1) status = 'justified';
+        else if(roll <= 3) status = 'present';
+        // roll === 4 -> leave unmarked, so not every class is fully filled in
+        if(status) attendance.push({ id: uid(), memberId: mid, date: dateStr, slotId: s.id, status, category: s.category });
+      });
+    });
+  }
+
+  /* One employee per distinct class name, so the schedule form's trainer
+     dropdown works right away and every class gets its employee color. */
+  const employees = [];
+  schedule.forEach(s => { if(!employees.some(e => e.name === s.className)) employees.push({ id: uid(), name: s.className, category: s.category, colorIndex: employees.length }); });
+
+  return { members, schedule, attendance, payments, employees };
+}
+function loadSampleData(){
+  if(!confirm('Αυτό θα αντικαταστήσει όλα τα τρέχοντα δεδομένα με δοκιμαστικά δεδομένα. Συνέχεια;')) return;
+  data = Object.assign(defaultData(), buildSampleData());
+  saveData();
+  navigate('dashboard');
+}
+
+/* ---------------- Init ---------------- */
+probeStorageLimit();
+checkStorageSpace();
+updateSaveWarning();
+render();
+initFileHandle();
+/* Another tab of this app saved: adopt its data instead of overwriting it on
+   our next save. Every change is persisted immediately, so nothing pending
+   is lost here — the modal (if open) is left alone and the page re-rendered. */
+window.addEventListener('storage', e => {
+  if(e.key !== STORAGE_KEY || e.newValue == null) return;
+  try{ data = normalizeData(JSON.parse(e.newValue)); }catch(err){ return; }
+  invalidateDerived();
+  render();
+});
+</script>
+</body>
+</html>
