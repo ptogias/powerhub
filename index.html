@@ -397,11 +397,16 @@ function normalizeData(parsed){
 /* Size of the last snapshot written to localStorage — see storageUsage().
    Declared before loadData() runs, which records the loaded size. */
 let lastSavedChars = 0;
+/* When the snapshot in localStorage was written (ms since epoch) — compared
+   against the IndexedDB copy's stamp on load, see initDurableStore(). */
+const SAVED_AT_KEY = 'gymAppSavedAt';
+let lastSavedAt = 0;
 function loadData(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
     if(!raw) return defaultData();
     lastSavedChars = raw.length;
+    lastSavedAt = Number(localStorage.getItem(SAVED_AT_KEY)) || 0;
     return normalizeData(JSON.parse(raw));
   }catch(e){
     return defaultData();
@@ -409,6 +414,77 @@ function loadData(){
 }
 
 let data = loadData();
+
+/* ---------------- Durable store (IndexedDB) ---------------- */
+/* localStorage is synchronous and instant, but capped at ~5 MB — a busy gym
+   fills that in roughly a year of attendance, after which setItem() throws
+   and nothing more would be saved. IndexedDB has a far larger budget (a share
+   of the disk), so every snapshot is ALSO written there, stamped with the
+   save time. On load, localStorage is read synchronously for an instant
+   first paint, then the IndexedDB copy is checked: if it is newer (the
+   localStorage write failed for lack of room, or browser storage was
+   partially cleared) it wins and the page re-renders. All IndexedDB work is
+   chained on one promise so a read never races a later write. */
+const DATA_DB = 'gymAppSnapshots';
+const hasIDB = typeof indexedDB !== 'undefined';
+let dbChain = Promise.resolve();
+function openDataDB(){
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DATA_DB, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('snapshots');
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbGetSnapshot(){
+  const db = await openDataDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('snapshots', 'readonly');
+    const req = tx.objectStore('snapshots').get('current');
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+    tx.oncomplete = () => db.close();
+  });
+}
+async function idbPutSnapshot(record){
+  const db = await openDataDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('snapshots', 'readwrite');
+    tx.objectStore('snapshots').put(record, 'current');
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+function saveToDurableStore(json, savedAt){
+  if(!hasIDB) return Promise.resolve();
+  dbChain = dbChain
+    .then(() => idbPutSnapshot({ json, savedAt }))
+    .then(() => { saveIssues.durable = null; })
+    .catch(e => {
+      console.warn('IndexedDB save failed:', e);
+      saveIssues.durable = "⚠️ Η αποθήκευση στη βάση δεδομένων του browser απέτυχε. Κατεβάστε αντίγραφο ασφαλείας τώρα (καρτέλα Αντίγραφο Ασφαλείας).";
+    })
+    .then(updateSaveWarning);
+  return dbChain;
+}
+function initDurableStore(){
+  if(!hasIDB) return Promise.resolve();
+  /* Ask the browser not to evict this site's storage under disk pressure. */
+  try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); }catch(e){}
+  dbChain = dbChain.then(idbGetSnapshot).then(rec => {
+    if(rec && typeof rec.json === 'string' && Number(rec.savedAt) > lastSavedAt){
+      data = normalizeData(JSON.parse(rec.json));
+      lastSavedAt = Number(rec.savedAt);
+      lastSavedChars = rec.json.length;
+      invalidateDerived();
+      render();
+    } else if(!rec && lastSavedChars > 0){
+      /* First run after this feature shipped: seed the durable copy. */
+      return idbPutSnapshot({ json: JSON.stringify(data), savedAt: lastSavedAt || Date.now() });
+    }
+  }).catch(e => { console.warn('IndexedDB load failed:', e); });
+  return dbChain;
+}
 
 /* ---------------- Derived-data cache ---------------- */
 /* Rendering recomputes per-member balances and package ledgers many times per
@@ -423,7 +499,7 @@ function derived(){
     const payByMember = {}, attByMember = {};
     data.payments.forEach(p => (payByMember[p.memberId] = payByMember[p.memberId] || []).push(p));
     data.attendance.forEach(a => (attByMember[a.memberId] = attByMember[a.memberId] || []).push(a));
-    derivedCache = { payByMember, attByMember, ledgers: {} };
+    derivedCache = { payByMember, attByMember, ledgers: {}, reviewedSet: new Set(data.reviewedNotes) };
   }
   return derivedCache;
 }
@@ -475,25 +551,31 @@ let fileHandleStatus = 'none'; // 'none' | 'connected' | 'needs-permission'
 
 /* Tracks why the save banner is showing, if at all. Storage issues take
    priority over file-write issues since losing localStorage is the bigger risk. */
-const saveIssues = { storage: null, space: null, file: null };
+const saveIssues = { storage: null, space: null, file: null, durable: null };
 function updateSaveWarning(){
   const banner = document.getElementById('save-warning');
-  const msg = saveIssues.storage || saveIssues.file || saveIssues.space;
-  /* The "almost full" notice is a heads-up, not a failure — amber, and once
-     dismissed it stays away until usage climbs another 5 percentage points. */
-  const onlySpace = !saveIssues.storage && !saveIssues.file && saveIssues.space;
-  if(msg && !(onlySpace && dismissedSpaceStep === storageUsage().step)){
+  /* Red = the last change may not be safe anywhere. Amber = heads-up only:
+     localStorage is full/nearly full but the IndexedDB copy still saves. */
+  const hard = saveIssues.durable || (!hasIDB && saveIssues.storage) || saveIssues.file;
+  const soft = (hasIDB && saveIssues.storage && !dismissedStorageFull) ||
+               (saveIssues.space && dismissedSpaceStep !== storageUsage().step);
+  const msg = hard || soft;
+  if(msg){
     document.getElementById('save-warning-text').textContent = msg;
-    banner.classList.toggle('warn', !!onlySpace);
+    banner.classList.toggle('warn', !hard);
     banner.style.display = 'flex';
   } else {
     banner.style.display = 'none';
   }
 }
 let dismissedSpaceStep = null;
+let dismissedStorageFull = false;
 function dismissSaveWarning(){
   document.getElementById('save-warning').style.display = 'none';
-  if(!saveIssues.storage && !saveIssues.file && saveIssues.space) dismissedSpaceStep = storageUsage().step;
+  const hard = saveIssues.durable || (!hasIDB && saveIssues.storage) || saveIssues.file;
+  if(hard) return;
+  if(hasIDB && saveIssues.storage) dismissedStorageFull = true;
+  else if(saveIssues.space) dismissedSpaceStep = storageUsage().step;
 }
 
 /* ---- Browser storage capacity ---- */
@@ -533,21 +615,29 @@ function storageUsage(){
 }
 function checkStorageSpace(){
   const u = storageUsage();
-  saveIssues.space = u.level === 'ok' ? null :
-    `⚠️ Ο αποθηκευτικός χώρος του browser είναι σχεδόν γεμάτος (${u.pct}% — ${u.mb} MB από περίπου ${u.limitMb} MB). Όταν γεμίσει, οι νέες αλλαγές ΔΕΝ θα αποθηκεύονται. Κατεβάστε αντίγραφο ασφαλείας τώρα (καρτέλα Αντίγραφο Ασφαλείας).`;
+  saveIssues.space = u.level === 'ok' ? null : hasIDB
+    ? `⚠️ Ο γρήγορος χώρος αποθήκευσης του browser είναι σχεδόν γεμάτος (${u.pct}% — ${u.mb} MB από περίπου ${u.limitMb} MB). Η εφαρμογή θα συνεχίσει να αποθηκεύει στη βάση δεδομένων του browser, αλλά κατεβάστε ένα αντίγραφο ασφαλείας (καρτέλα Αντίγραφο Ασφαλείας).`
+    : `⚠️ Ο αποθηκευτικός χώρος του browser είναι σχεδόν γεμάτος (${u.pct}% — ${u.mb} MB από περίπου ${u.limitMb} MB). Όταν γεμίσει, οι νέες αλλαγές ΔΕΝ θα αποθηκεύονται. Κατεβάστε αντίγραφο ασφαλείας τώρα (καρτέλα Αντίγραφο Ασφαλείας).`;
 }
 
 function saveData(){
   invalidateDerived();
+  const json = JSON.stringify(data);
+  /* Strictly increasing even for two saves in the same millisecond, so the
+     durable copy's stamp always orders correctly against localStorage's. */
+  lastSavedAt = Math.max(Date.now(), lastSavedAt + 1);
+  lastSavedChars = json.length;
   try{
-    const json = JSON.stringify(data);
     localStorage.setItem(STORAGE_KEY, json);
-    lastSavedChars = json.length;
+    localStorage.setItem(SAVED_AT_KEY, String(lastSavedAt));
     saveIssues.storage = null;
   }catch(e){
     console.warn('localStorage save failed:', e);
-    saveIssues.storage = "⚠️ Η τελευταία σας αλλαγή ΔΕΝ αποθηκεύτηκε — ο χώρος αποθήκευσης του browser είναι γεμάτος. Κατεβάστε αντίγραφο ασφαλείας τώρα και μετά ελευθερώστε χώρο ή συνδέστε ένα αρχείο ζωντανής αποθήκευσης (καρτέλα Αντίγραφο Ασφαλείας).";
+    saveIssues.storage = hasIDB
+      ? "⚠️ Ο γρήγορος χώρος αποθήκευσης του browser γέμισε. Οι αλλαγές σας εξακολουθούν να αποθηκεύονται στη βάση δεδομένων του browser, αλλά κατεβάστε ένα αντίγραφο ασφαλείας για σιγουριά (καρτέλα Αντίγραφο Ασφαλείας)."
+      : "⚠️ Η τελευταία σας αλλαγή ΔΕΝ αποθηκεύτηκε — ο χώρος αποθήκευσης του browser είναι γεμάτος. Κατεβάστε αντίγραφο ασφαλείας τώρα και μετά ελευθερώστε χώρο ή συνδέστε ένα αρχείο ζωντανής αποθήκευσης (καρτέλα Αντίγραφο Ασφαλείας).";
   }
+  saveToDurableStore(json, lastSavedAt);
   checkStorageSpace();
   updateSaveWarning();
   if(hasFSAccess && fileHandle && fileHandleStatus === 'connected'){
@@ -1449,7 +1539,7 @@ function viewMember(id){
       `<div style="max-height:160px;overflow-y:auto;">${att.slice(0,15).map(a=>{
         const meta = STATUS_META[recordStatus(a)];
         return `<div class="enrolled-item" style="flex-direction:column;align-items:flex-start;gap:2px;">
-          <span>${formatDate(a.date)} ${categoryBadge(attendanceCategory(a))} <span class="badge ${meta.cls}">${meta.label}</span></span>
+          <span style="display:flex;align-items:center;gap:6px;width:100%;"><span>${formatDate(a.date)} ${categoryBadge(attendanceCategory(a))} <span class="badge ${meta.cls}">${meta.label}</span></span><button class="icon-btn" style="margin-left:auto;" title="Διαγραφή αυτής της καταγραφής (το μάθημα επιστρέφεται)" onclick="deleteAttendanceRecord('${m.id}','${a.date}','${a.slotId||''}')">✕</button></span>
           ${a.note?`<span class="note-chip" style="cursor:default;white-space:normal;max-width:100%;">💬 ${escapeHtml(a.note)}</span>`:''}
         </div>`;
       }).join('')}</div>
@@ -1484,6 +1574,19 @@ function viewMember(id){
     </div>
   `);
 }
+/* Any attendance record can be removed from the member card — including ones
+   for classes/dates that no longer appear in any roster (class deleted, member
+   taken off it), which would otherwise keep costing a credit with no way to
+   undo. (member, date, slot) is unique, see setClassStatus()/markClassPresent(). */
+function deleteAttendanceRecord(memberId, date, slotId){
+  const rec = data.attendance.find(a => a.memberId===memberId && a.date===date && (a.slotId||'')===slotId);
+  if(!rec) return;
+  if(!confirm(`Διαγραφή της καταγραφής παρουσίας της ${formatDate(date)}; Το μάθημα θα επιστραφεί στο μέλος.`)) return;
+  data.attendance = data.attendance.filter(a => a !== rec);
+  saveData();
+  render();
+  viewMember(memberId);
+}
 function renderMemberClassSection(m){
   const today = todayStr();
   /* Ended segments (validUntil in the past, left behind by "this and
@@ -1513,15 +1616,16 @@ function renderMemberClassSection(m){
      Past deltas are history and stay off the card. */
   const deltas = [];
   data.scheduleOverrides.forEach(o => {
-    if(o.date < today || o.cancelled) return;
+    if(o.date < today) return;
     const isAdd = (o.addMemberIds||[]).includes(m.id);
     const isRemove = (o.removeMemberIds||[]).includes(m.id);
     if(!isAdd && !isRemove) return;
     const series = data.schedule.find(s=>s.id===o.seriesId);
     if(!series) return;
-    const occ = occurrenceForSeriesOnDate(series, o.date);
-    if(!occ) return;
-    deltas.push({ date: o.date, seriesId: o.seriesId, occ, isAdd });
+    /* A delta on a cancelled date is dormant (it applies again if the date
+       is restored) — shown, so it can still be found and undone. */
+    const occ = occurrenceForSeriesOnDate(series, o.date) || { startTime: o.startTime ?? series.startTime, endTime: o.endTime ?? series.endTime, className: o.className ?? series.className };
+    deltas.push({ date: o.date, seriesId: o.seriesId, occ, isAdd, cancelled: !!o.cancelled });
   });
   deltas.sort((a,b)=> a.date < b.date ? -1 : 1);
   return `
@@ -1529,7 +1633,7 @@ function renderMemberClassSection(m){
       enrolled.map(s=>`<div class="enrolled-item"><span>${DAY_SHORT[s.day]} ${s.startTime}–${s.endTime} — ${escapeHtml(s.className)} ${categoryBadge(s.category)}</span><button class="icon-btn" onclick="removeMemberFromClass('${m.id}','${s.id}')">✕</button></div>`).join('')}
     ${deltas.length===0 ? '' : `
       <div class="subtle" style="font-weight:700;margin-top:10px;">Αλλαγές μίας ημερομηνίας</div>
-      ${deltas.map(d=>`<div class="enrolled-item"><span>${formatDate(d.date)} · ${d.occ.startTime}–${d.occ.endTime} — ${escapeHtml(d.occ.className)} <span class="badge ${d.isAdd?'ok':'warn'}">${d.isAdd?'έξτρα συμμετοχή':'δεν θα έρθει'}</span></span><button class="icon-btn" title="Αναίρεση" onclick="undoMembershipDelta('${m.id}','${d.seriesId}','${d.date}')">↩</button></div>`).join('')}
+      ${deltas.map(d=>`<div class="enrolled-item"><span>${formatDate(d.date)} · ${d.occ.startTime}–${d.occ.endTime} — ${escapeHtml(d.occ.className)} <span class="badge ${d.isAdd?'ok':'warn'}">${d.isAdd?'έξτρα συμμετοχή':'δεν θα έρθει'}</span>${d.cancelled?' <span class="badge muted">ακυρωμένο μάθημα</span>':''}</span><button class="icon-btn" title="Αναίρεση" onclick="undoMembershipDelta('${m.id}','${d.seriesId}','${d.date}')">↩</button></div>`).join('')}
     `}
     ${available.length===0 ? '' :
       `<div class="form-row" style="align-items:flex-end;margin-top:8px;">
@@ -1669,6 +1773,9 @@ function saveEmployee(id){
   const name = document.getElementById('f-emp-name').value.trim();
   if(!name){ alert('Παρακαλώ εισάγετε ένα όνομα.'); return; }
   const category = document.getElementById('f-emp-category').value;
+  /* Classes, colours and the class tally are all keyed by the employee's
+     name, so two employees sharing one name would silently merge. */
+  if(data.employees.some(x => x.id !== id && x.name === name)){ alert('Υπάρχει ήδη υπάλληλος με αυτό το όνομα.'); return; }
   if(id){
     const e = data.employees.find(e=>e.id===id);
     const oldName = e.name;
@@ -1914,7 +2021,9 @@ function readSlotFormFields(){
     startTime: document.getElementById('f-start').value || '09:00',
     endTime: document.getElementById('f-end').value || '10:00',
     category: document.getElementById('f-category').value,
-    capacity: Math.max(1, parseInt(document.getElementById('f-cap').value) || 1),
+    /* Number(), not parseInt(): <input type="number"> accepts "1e3", which
+       parseInt reads as 1. */
+    capacity: Math.max(1, Math.floor(Number(document.getElementById('f-cap').value)) || 1),
     comments: document.getElementById('f-comments').value.trim(),
   };
 }
@@ -2027,6 +2136,18 @@ function openOccurrenceEditForm(seriesId, date){
     </div>
   `);
 }
+/* The per-occurrence fields an override can patch; a series' own value for
+   each, normalized the same way the form reads it. */
+const OCC_FIELDS = ['startTime','endTime','className','category','capacity','comments'];
+function seriesFieldValue(series, k){
+  return k === 'category' ? (series.category || CLASS_CATEGORIES[0]) : (k === 'comments' ? (series.comments || '') : series[k]);
+}
+/* Removes field patches that no longer differ from the series, keeping any
+   membership deltas / cancellation, and drops the override if nothing is left. */
+function pruneRedundantOverride(ov, series){
+  OCC_FIELDS.forEach(k => { if(ov[k] != null && ov[k] === seriesFieldValue(series, k)) delete ov[k]; });
+  cleanupOverride(ov);
+}
 function saveOccurrenceEdit(seriesId, date){
   const f = readSlotFormFields();
   if(!f.className){ alert('Δεν υπάρχει υπάλληλος σε αυτή την κατηγορία. Προσθέστε έναν πρώτα (καρτέλα Υπάλληλοι).'); return; }
@@ -2041,27 +2162,39 @@ function saveOccurrenceEdit(seriesId, date){
        edit that puts everything back to the series' values removes it. */
     let ov = data.scheduleOverrides.find(o=>o.seriesId===seriesId && o.date===date);
     if(!ov){ ov = { id: uid(), seriesId, date }; data.scheduleOverrides.push(ov); }
-    ['startTime','endTime','className','category','capacity','comments'].forEach(k => {
-      const seriesVal = k === 'category' ? (series.category || CLASS_CATEGORIES[0]) : (k === 'comments' ? (series.comments || '') : series[k]);
-      if(f[k] === seriesVal) delete ov[k]; else ov[k] = f[k];
-    });
+    OCC_FIELDS.forEach(k => { if(f[k] === seriesFieldValue(series, k)) delete ov[k]; else ov[k] = f[k]; });
     delete ov.cancelled;
     cleanupOverride(ov);
-  } else if(scope === 'following' && (!series.validFrom || date > series.validFrom)){
-    const newSeries = splitSeriesAt(series, date, f);
-    /* The override for this exact date is redundant now — its edits are
-       already the new series' base values. */
-    data.scheduleOverrides = data.scheduleOverrides.filter(o => !(o.seriesId===newSeries.id && o.date===date));
-  } else { // 'all' — or 'following' from the series' first occurrence, where a
-           // split would only leave behind an empty, unreachable old segment
-    /* Changing the whole series' category must not re-categorize its past
-       attendance — pin the old category onto any record that still relied
-       on the live lookup, same as the old single-series edit did. */
-    const oldCat = series.category || CLASS_CATEGORIES[0];
-    if(oldCat !== f.category){
-      data.attendance.forEach(a => { if(a.slotId === seriesId && !a.category) a.category = oldCat; });
+  } else {
+    /* Later segments of the same class (left behind by earlier splits) must
+       receive a "following" edit too, and an "all" edit reaches every
+       segment — otherwise the change silently reverts the day the next
+       segment takes over. Collected BEFORE the split so the fresh segment
+       isn't mistaken for a pre-existing sibling. */
+    const siblings = data.schedule.filter(s => isSiblingSegment(series, s) && (scope === 'all' || (s.validFrom || '') >= date));
+    const applyFields = s => {
+      /* Changing a segment's category must not re-categorize its past
+         attendance — pin the old category onto any record that still relied
+         on the live lookup, same as the old single-series edit did. */
+      const oldCat = s.category || CLASS_CATEGORIES[0];
+      if(oldCat !== f.category) data.attendance.forEach(a => { if(a.slotId === s.id && !a.category) a.category = oldCat; });
+      Object.assign(s, f);
+      /* Per-date patches that now merely repeat the base values would leave
+         a stale ✱ behind; membership deltas and cancellations are kept. */
+      data.scheduleOverrides.slice().forEach(o => { if(o.seriesId === s.id) pruneRedundantOverride(o, s); });
+    };
+    if(scope === 'following' && (!series.validFrom || date > series.validFrom)){
+      const newSeries = splitSeriesAt(series, date, f);
+      /* This date's field patches are redundant now (they ARE the new
+         segment's base values) — but a one-day membership change made for
+         this same date is a separate decision and stays. */
+      const ov = data.scheduleOverrides.find(o => o.seriesId===newSeries.id && o.date===date);
+      if(ov) pruneRedundantOverride(ov, newSeries);
+    } else { // 'all' — or 'following' from the series' first occurrence, where a
+             // split would only leave behind an empty, unreachable old segment
+      applyFields(series);
     }
-    Object.assign(series, f);
+    siblings.forEach(applyFields);
   }
   saveData();
   closeModal();
@@ -2102,11 +2235,27 @@ function deleteOccurrence(seriesId, date, scope){
     }
     let ov = data.scheduleOverrides.find(o=>o.seriesId===seriesId && o.date===date);
     if(!ov){ ov = { id: uid(), seriesId, date }; data.scheduleOverrides.push(ov); }
-    Object.keys(ov).forEach(k => { if(!['id','seriesId','date'].includes(k)) delete ov[k]; });
+    /* Field patches die with the cancelled occurrence; one-day membership
+       changes are kept so that restoring the date brings them back. */
+    OCC_FIELDS.forEach(k => delete ov[k]);
     ov.cancelled = true;
   } else if(scope === 'following'){
+    /* Every later segment of this same class goes too — ending only this
+       segment would let the class silently reappear the day the next one
+       takes over. */
+    const laterSiblings = data.schedule.filter(s => isSiblingSegment(series, s) && (s.validFrom || '') >= date);
+    const goneIds = [seriesId, ...laterSiblings.map(s => s.id)];
+    /* Same reasoning as the single-date case: attendance already marked on
+       dates that are now being deleted would keep charging members for
+       classes that (per this deletion) never ran, invisibly. */
+    const marked = data.attendance.filter(a => goneIds.includes(a.slotId) && a.date >= date);
+    if(marked.length > 0){
+      if(!confirm(`Υπάρχουν ήδη ${marked.length} καταγραφές παρουσίας από ${formatDate(date)} και μετά. Θα διαγραφούν μαζί με τα μαθήματα (τα μαθήματα θα επιστραφούν στα μέλη). Συνέχεια;`)) return;
+      data.attendance = data.attendance.filter(a => !(goneIds.includes(a.slotId) && a.date >= date));
+    }
     series.validUntil = dayBeforeStr(date);
-    data.scheduleOverrides = data.scheduleOverrides.filter(o => !(o.seriesId===seriesId && o.date >= date));
+    data.schedule = data.schedule.filter(s => !laterSiblings.includes(s));
+    data.scheduleOverrides = data.scheduleOverrides.filter(o => !(goneIds.includes(o.seriesId) && o.date >= date));
   } else { // 'all'
     /* Pin the series' category onto its attendance history before it goes
        away — otherwise those records would fall back to Βάρη and consumed
@@ -2205,6 +2354,25 @@ function applyMembershipChange(seriesId, date, memberId, action, scope, origin){
   if(action === 'add'){
     const occ = occurrenceForSeriesOnDate(series, date);
     if(occ && occ.memberIds.length >= occ.capacity){ alert('Αυτό το μάθημα είναι πλήρες.'); returnToView(); return; }
+    /* A recurring add fills a seat on EVERY affected date, so the base
+       lists of this segment and of every sibling it will reach must have
+       room too — not just the one date on screen. */
+    if(scope !== 'only'){
+      const affected = [series, ...data.schedule.filter(s => isSiblingSegment(series, s) && (scope === 'all' || (s.validFrom || '') >= date))];
+      const baseFull = affected.some(s => !s.memberIds.includes(memberId) && s.memberIds.length >= s.capacity);
+      /* ...and dates that already carry one-day additions or a smaller
+         one-day capacity can be full even when the base list isn't. */
+      const overrideFull = data.scheduleOverrides.some(o => {
+        const s = affected.find(x => x.id === o.seriesId);
+        if(!s || (scope === 'following' && o.date < date)) return false;
+        const occ = occurrenceForSeriesOnDate(s, o.date);
+        return occ && !occ.memberIds.includes(memberId) && occ.memberIds.length >= occ.capacity;
+      });
+      if(baseFull || overrideFull){
+        alert('Αυτό το μάθημα είναι πλήρες σε κάποιες από τις επαναλήψεις που θα επηρεάζονταν. Προσθέστε το μέλος μόνο σε συγκεκριμένη ημερομηνία ή αυξήστε τη χωρητικότητα.');
+        returnToView(); return;
+      }
+    }
   }
   if(scope === 'only'){
     let ov = data.scheduleOverrides.find(o=>o.seriesId===seriesId && o.date===date);
@@ -2423,7 +2591,15 @@ function renderClassRosters(){
            in each roster. */
         const rows = enrolled.map(m=>{
           const rec = attendanceRecordFor(m.id, attendanceDate, s.seriesId);
-          return { m, status: rec ? recordStatus(rec) : null, note: rec ? (rec.note||'') : '' };
+          return { m, status: rec ? recordStatus(rec) : null, note: rec ? (rec.note||'') : '', extra: false };
+        });
+        /* Someone marked for this class/date and THEN taken off the roster
+           (a one-day removal, or dropped from the series) still holds a
+           record that costs a credit. It must stay visible here so it can be
+           corrected — otherwise it silently charges them forever. */
+        data.attendance.filter(a => a.slotId===s.seriesId && a.date===attendanceDate && !s.memberIds.includes(a.memberId)).forEach(rec => {
+          const m = data.members.find(x => x.id === rec.memberId);
+          if(m) rows.push({ m, status: recordStatus(rec), note: rec.note||'', extra: true });
         });
         const presentCount = rows.filter(r=>r.status==='present').length;
         const justifiedCount = rows.filter(r=>r.status==='justified').length;
@@ -2432,16 +2608,16 @@ function renderClassRosters(){
         return `<div${i<occs.length-1?' style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border);"':''}>
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
             <div><strong>${s.startTime}–${s.endTime}</strong> — ${escapeHtml(s.className)} ${categoryBadge(s.category)}
-              <span class="subtle">(${presentCount} παρόντες${justifiedCount?`, ${justifiedCount} δικαιολ. απουσία`:''}${unjustifiedCount?`, ${unjustifiedCount} αδικαιολ. απουσία`:''} / ${enrolled.length})</span>
+              <span class="subtle">(${presentCount} παρόντες${justifiedCount?`, ${justifiedCount} δικαιολ. απουσία`:''}${unjustifiedCount?`, ${unjustifiedCount} αδικαιολ. απουσία`:''} / ${rows.length})</span>
             </div>
             ${enrolled.length===0 ? '' :
               `<button class="btn ${allMarked?'secondary':''} small" onclick="markClassPresent('${s.seriesId}')" ${allMarked?'disabled':''}>✓ Σήμανση Υπολοίπων ως Παρόντες</button>`}
           </div>
-          ${enrolled.length===0 ? '<div class="subtle">Κανείς δεν έχει κλείσει θέση.</div>' :
+          ${rows.length===0 ? '<div class="subtle">Κανείς δεν έχει κλείσει θέση.</div>' :
             rows.map(r=>`
               <div class="roster-row">
                 <div>
-                  <div>${escapeHtml(r.m.name)}</div>
+                  <div>${escapeHtml(r.m.name)}${r.extra ? ' <span class="badge warn" title="Έχει καταγραφή παρουσίας αλλά δεν είναι πλέον στη λίστα αυτού του μαθήματος. Πατήστε την ενεργή κατάσταση για να διαγραφεί η καταγραφή.">εκτός λίστας</span>' : ''}</div>
                   ${r.note?`<div class="note-chip" onclick="openAttendanceNoteModal('${r.m.id}','${s.seriesId}')" title="Επεξεργασία σημείωσης">💬 ${escapeHtml(r.note)}</div>`:''}
                 </div>
                 <div class="status-seg">
@@ -2532,6 +2708,11 @@ function markClassPresent(slotId){
 }
 /* ---------------- Payments ---------------- */
 let paymentSearch = '';
+/* The history table is rendered on every keystroke of its search box, and a
+   few years of payments is thousands of rows — show a page at a time. */
+const PAYMENT_PAGE = 200;
+let paymentHistoryLimit = PAYMENT_PAGE;
+function showMorePayments(){ paymentHistoryLimit += 500; render(); }
 /* Renders a list of {month, category, count, amount, classes} rows as a
    table grouped by month first (one bold subtotal header row per month),
    then broken down by category underneath — instead of repeating the same
@@ -2666,14 +2847,14 @@ function renderPayments(){
     <div class="card">
       <div class="toolbar">
         <div class="section-title" style="margin:0;">Ιστορικό Πληρωμών</div>
-        <input class="search" id="payment-search-input" placeholder="Αναζήτηση μέλους..." value="${escapeHtml(paymentSearch)}" oninput="paymentSearch=this.value; render();">
+        <input class="search" id="payment-search-input" placeholder="Αναζήτηση μέλους..." value="${escapeHtml(paymentSearch)}" oninput="paymentSearch=this.value; paymentHistoryLimit=PAYMENT_PAGE; render();">
       </div>
       ${allPayments.length===0 ? '<div class="empty">Δεν έχουν καταγραφεί πληρωμές ακόμα.</div>' :
       `<div class="subtle" style="margin-bottom:8px;">«Ισχύει από» = η πραγματική ημέρα που άρχισε να χρησιμοποιείται αυτή η πληρωμή. Ένα (*) σημαίνει ότι κάλυψε παρουσίες που έγιναν πριν πληρωθεί. «Εκκρεμεί» σημαίνει ότι θα ενεργοποιηθεί μόλις εξαντληθεί το προηγούμενο πακέτο. «Δεν έχει χρησιμοποιηθεί ακόμα» σημαίνει ότι είναι ήδη το ενεργό πακέτο, απλώς δεν έχει καταγραφεί καμία παρουσία από αυτό ακόμα.</div>
       <div class="table-scroll"><table>
         <thead><tr><th>Ημερομηνία</th><th>Μέλος</th><th>Ποσό</th><th>Τρόπος</th><th>Κατηγορία</th><th>Μαθήματα</th><th>Ισχύει Από</th><th>Απόδειξη</th><th></th></tr></thead>
         <tbody>
-          ${allPayments.map(p=>{
+          ${allPayments.slice(0, paymentHistoryLimit).map(p=>{
             const info = paymentEffectiveInfo(p);
             const effectText = info.state==='active' ? formatDate(info.date) + (info.backdated ? ' *' : '') :
               info.state==='pending' ? 'Εκκρεμεί' : 'Δεν έχει χρησιμοποιηθεί ακόμα';
@@ -2690,7 +2871,8 @@ function renderPayments(){
           </tr>`;
           }).join('')}
         </tbody>
-      </table></div>`}
+      </table></div>
+      ${allPayments.length > paymentHistoryLimit ? `<div style="margin-top:10px;"><button class="btn secondary small" onclick="showMorePayments()">Εμφάνιση περισσότερων (${allPayments.length - paymentHistoryLimit} ακόμα)</button></div>` : ''}`}
     </div>
   `;
 }
@@ -2739,10 +2921,11 @@ function openPaymentForm(memberId, category){
 function savePayment(){
   const memberId = document.getElementById('f-member').value;
   if(!memberId){ alert('Παρακαλώ επιλέξτε ένα μέλος από τη λίστα.'); return; }
-  const amount = parseFloat(document.getElementById('f-amount').value);
-  if(!amount || amount <= 0){ alert('Παρακαλώ εισάγετε ένα έγκυρο ποσό.'); return; }
-  const classes = parseInt(document.getElementById('f-classes').value);
-  if(!classes || classes <= 0){ alert('Παρακαλώ εισάγετε έγκυρο αριθμό μαθημάτων.'); return; }
+  if(!data.members.some(m => m.id === memberId)){ alert('Αυτό το μέλος δεν υπάρχει πια.'); return; }
+  const amount = Number(document.getElementById('f-amount').value);
+  if(!amount || !isFinite(amount) || amount <= 0){ alert('Παρακαλώ εισάγετε ένα έγκυρο ποσό.'); return; }
+  const classes = Math.floor(Number(document.getElementById('f-classes').value));
+  if(!classes || !isFinite(classes) || classes <= 0){ alert('Παρακαλώ εισάγετε έγκυρο αριθμό μαθημάτων.'); return; }
   const method = document.getElementById('f-method').value;
   if(!method){ alert('Παρακαλώ επιλέξτε τρόπο πληρωμής.'); return; }
   const category = document.getElementById('f-category').value;
@@ -2844,7 +3027,7 @@ function noteClassBadge(n){
    reviewedNotes comment in normalizeData(). A recurring note thus needs a
    fresh checkmark every week; a one-time note only ever has one. */
 function noteReviewKey(noteId, wk){ return noteId + '__' + wk; }
-function isNoteReviewed(noteId, wk){ return data.reviewedNotes.includes(noteReviewKey(noteId, wk)); }
+function isNoteReviewed(noteId, wk){ return derived().reviewedSet.has(noteReviewKey(noteId, wk)); }
 function renderNoteWeekCard(wk, notes, isCurrent){
   const weekEnd = addDaysLocalStr(wk, 6);
   const allReviewed = notes.length > 0 && notes.every(n => isNoteReviewed(n.id, wk));
@@ -3025,12 +3208,20 @@ let dismissedReminderKey = null;
    occurrence is reviewed independently, so this is what "due" is checked
    against, not the notes list itself. */
 function noteOccurrences(){
+  /* Memoized per data change AND per calendar day (the week list grows when
+     Monday rolls over while the app is left open): checkNotesReminder() runs
+     inside every render, and years of recurring notes made this the single
+     most expensive thing on each keystroke. */
+  const cache = derived();
   const currentWeekKey = mondayOf(todayStr());
+  if(cache.noteOcc && cache.noteOccWeek === currentWeekKey) return cache.noteOcc;
   const occ = [];
   data.notes.forEach(n => {
     if(n.recurring) weeksBetween(n.weekKey, currentWeekKey).forEach(wk => occ.push({ id: n.id, weekKey: wk }));
     else occ.push({ id: n.id, weekKey: n.weekKey });
   });
+  cache.noteOcc = occ;
+  cache.noteOccWeek = currentWeekKey;
   return occ;
 }
 /* Due weeks are surfaced one at a time (oldest first), not batched into a
@@ -3104,10 +3295,12 @@ function renderBackup(){
     <div class="card">
       <div class="section-title">Χώρος Αποθήκευσης στον Browser</div>
       ${(() => { const u = storageUsage(); return `
-        <div class="subtle">Αυτός ο browser δίνει στην εφαρμογή περίπου ${u.limitMb} MB. Όταν γεμίσει, οι νέες αλλαγές δεν αποθηκεύονται.</div>
+        <div class="subtle">${hasIDB
+          ? `Ο γρήγορος χώρος αποθήκευσης αυτού του browser είναι περίπου ${u.limitMb} MB. Τα δεδομένα αποθηκεύονται επιπλέον στη βάση δεδομένων του browser (IndexedDB), που έχει πολύ μεγαλύτερο όριο — η εφαρμογή συνεχίζει να αποθηκεύει κανονικά ακόμα κι όταν ο γρήγορος χώρος γεμίσει.`
+          : `Αυτός ο browser δίνει στην εφαρμογή περίπου ${u.limitMb} MB. Όταν γεμίσει, οι νέες αλλαγές δεν αποθηκεύονται.`}</div>
         <div class="storage-meter ${u.level}"><div style="width:${u.pct}%;"></div></div>
         <div class="subtle"><strong>${u.mb} MB</strong> από ${u.limitMb} MB σε χρήση (${u.pct}%) — ${data.attendance.length} παρουσίες, ${data.payments.length} πληρωμές, ${data.members.length} μέλη</div>
-        ${u.level==='ok' ? '' : `<div class="subtle" style="margin-top:8px;color:var(--${u.level});font-weight:600;">${u.level==='danger' ? '🛑 Σχεδόν γεμάτος. Κατεβάστε αντίγραφο ασφαλείας τώρα.' : '⚠️ Πλησιάζει το όριο. Κατεβάστε αντίγραφο ασφαλείας.'}</div>`}
+        ${u.level==='ok' ? '' : `<div class="subtle" style="margin-top:8px;color:var(--${hasIDB ? 'warn' : u.level});font-weight:600;">${hasIDB ? '⚠️ Ο γρήγορος χώρος πλησιάζει το όριο — καλή στιγμή για ένα αντίγραφο ασφαλείας.' : u.level==='danger' ? '🛑 Σχεδόν γεμάτος. Κατεβάστε αντίγραφο ασφαλείας τώρα.' : '⚠️ Πλησιάζει το όριο. Κατεβάστε αντίγραφο ασφαλείας.'}</div>`}
       `; })()}
     </div>
     <div class="card">
@@ -3148,6 +3341,13 @@ function exportData(){
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+function looksLikeBackup(parsed){
+  if(!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+  const keys = Object.keys(defaultData());
+  const isFullExport = keys.every(k => Array.isArray(parsed[k]));
+  const hasRecords = keys.some(k => Array.isArray(parsed[k]) && parsed[k].length > 0);
+  return isFullExport || hasRecords;
+}
 function importData(){
   const input = document.getElementById('import-file');
   if(!input.files.length){ alert('Επιλέξτε πρώτα ένα αρχείο αντιγράφου ασφαλείας.'); return; }
@@ -3157,9 +3357,11 @@ function importData(){
     try{
       const parsed = JSON.parse(e.target.result);
       if(!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('bad file');
-      /* A backup must actually contain at least one of the expected sections —
-         otherwise a random JSON file would silently wipe everything. */
-      if(!Object.keys(defaultData()).some(k => Array.isArray(parsed[k]))) throw new Error('bad file');
+      /* A backup must actually look like one: either a full export (every
+         section present, even if empty) or at least one section with real
+         records in it — otherwise a random JSON file that happens to carry
+         an empty array under one of our key names would wipe everything. */
+      if(!looksLikeBackup(parsed)) throw new Error('bad file');
       data = normalizeData(parsed);
       saveData();
       alert('Τα δεδομένα επαναφέρθηκαν με επιτυχία.');
@@ -3277,7 +3479,9 @@ function buildSampleData(){
 }
 function loadSampleData(){
   if(!confirm('Αυτό θα αντικαταστήσει όλα τα τρέχοντα δεδομένα με δοκιμαστικά δεδομένα. Συνέχεια;')) return;
-  data = Object.assign(defaultData(), buildSampleData());
+  /* Normalized like a loaded snapshot, so what's on screen now is exactly
+     what a reload would show (defaults such as validFrom/flagged filled in). */
+  data = normalizeData(Object.assign(defaultData(), buildSampleData()));
   saveData();
   navigate('dashboard');
 }
@@ -3287,13 +3491,22 @@ probeStorageLimit();
 checkStorageSpace();
 updateSaveWarning();
 render();
+initDurableStore();
 initFileHandle();
 /* Another tab of this app saved: adopt its data instead of overwriting it on
    our next save. Every change is persisted immediately, so nothing pending
-   is lost here — the modal (if open) is left alone and the page re-rendered. */
+   is lost here — the modal (if open) is left alone and the page re-rendered.
+   Only snapshots shaped like our own writes are adopted: anything else in
+   that key (another script, a corrupted write) is ignored rather than
+   normalized into an empty dataset that would wipe this tab's view. */
 window.addEventListener('storage', e => {
   if(e.key !== STORAGE_KEY || e.newValue == null) return;
-  try{ data = normalizeData(JSON.parse(e.newValue)); }catch(err){ return; }
+  let parsed;
+  try{ parsed = JSON.parse(e.newValue); }catch(err){ return; }
+  if(!parsed || typeof parsed !== 'object' || !Object.keys(defaultData()).every(k => Array.isArray(parsed[k]))) return;
+  data = normalizeData(parsed);
+  lastSavedChars = e.newValue.length;
+  try{ lastSavedAt = Math.max(lastSavedAt, Number(localStorage.getItem(SAVED_AT_KEY)) || 0); }catch(err){}
   invalidateDerived();
   render();
 });

@@ -1,0 +1,5 @@
+# Windows Script Host reads .vbs as ANSI or UTF-16 (never UTF-8). Store the
+# scripts as UTF-8 in git for readable diffs, but check them out as UTF-16 LE
+# with BOM and CRLF so the Greek text in them survives on the user's PC.
+*.vbs text working-tree-encoding=UTF-16LE-BOM eol=crlf
+*.ico binary
