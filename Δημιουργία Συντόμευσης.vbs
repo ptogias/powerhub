@@ -14,7 +14,7 @@ desktopPath = shell.SpecialFolders("Desktop")
 Set shortcut = shell.CreateShortcut(desktopPath & "\PowerHub.lnk")
 shortcut.TargetPath = scriptDir & "\PowerHub.vbs"
 shortcut.WorkingDirectory = scriptDir
-shortcut.IconLocation = "shell32.dll,137"
+shortcut.IconLocation = scriptDir & "\powerhub.ico"
 shortcut.Description = "Άνοιγμα PowerHub"
 shortcut.Save
 

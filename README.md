@@ -50,8 +50,8 @@ The repo is **public**, so the raw-file URL works with no authentication — no 
 ### Setup, once this repo exists on GitHub
 
 1. In `PowerHub.vbs`, replace the `rawUrl` value with the actual `raw.githubusercontent.com` path for this repo's `main` branch.
-2. Give the person `index.html`, `PowerHub.vbs`, and `Δημιουργία Συντόμευσης.vbs` together in one folder.
-3. Have them double-click `Δημιουργία Συντόμευσης.vbs` **once** — it creates a "PowerHub" shortcut on their Desktop pointing at `PowerHub.vbs`, so they never need to open this folder again. (The icon it picks is a generic placeholder; feel free to right-click the shortcut → Properties → Change Icon for something nicer.)
+2. Give the person `index.html`, `PowerHub.vbs`, `powerhub.ico`, and `Δημιουργία Συντόμευσης.vbs` together in one folder.
+3. Have them double-click `Δημιουργία Συντόμευσης.vbs` **once** — it creates a "PowerHub" shortcut on their Desktop pointing at `PowerHub.vbs`, using `powerhub.ico` as its icon, so they never need to open this folder again.
 4. Tell them to always launch the app via that Desktop shortcut, not by opening `index.html` directly.
 5. From then on, pushing changes to `main` is enough — they'll pick them up next time they launch the app.
 
