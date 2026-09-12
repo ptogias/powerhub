@@ -29,7 +29,16 @@ open index.html
 
 ## Project structure
 
-Everything — markup, styles, and logic — lives in the single `index.html` file.
+```
+index.html             the entire app — markup, styles, and logic
+README.md
+windows-launcher/       distribution tooling for the Windows end user (see below)
+  PowerHub.vbs
+  Δημιουργία Συντόμευσης.vbs
+  powerhub.ico
+```
+
+`index.html` is the only file the app itself needs. Everything under `windows-launcher/` exists solely to get updates to a non-technical Windows user automatically — it's not part of the app.
 
 ## Shipping updates to a non-technical user (Windows)
 
@@ -49,8 +58,8 @@ The repo is **public**, so the raw-file URL works with no authentication — no 
 
 ### Setup, once this repo exists on GitHub
 
-1. In `PowerHub.vbs`, replace the `rawUrl` value with the actual `raw.githubusercontent.com` path for this repo's `main` branch.
-2. Give the person `index.html`, `PowerHub.vbs`, `powerhub.ico`, and `Δημιουργία Συντόμευσης.vbs` together in one folder.
+1. In `windows-launcher/PowerHub.vbs`, replace the `rawUrl` value with the actual `raw.githubusercontent.com` path for this repo's `main` branch.
+2. On the person's PC, put `index.html` together with the three files from `windows-launcher/` **flattened into one folder** (`PowerHub.vbs`, `Δημιουργία Συντόμευσης.vbs`, and `powerhub.ico` all sit next to `index.html`, not in a subfolder) — the launcher expects `index.html` to be right next to it.
 3. Have them double-click `Δημιουργία Συντόμευσης.vbs` **once** — it creates a "PowerHub" shortcut on their Desktop pointing at `PowerHub.vbs`, using `powerhub.ico` as its icon, so they never need to open this folder again.
 4. Tell them to always launch the app via that Desktop shortcut, not by opening `index.html` directly.
 5. From then on, pushing changes to `main` is enough — they'll pick them up next time they launch the app.
