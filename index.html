@@ -1321,10 +1321,12 @@ function renderNeedsAttentionCard(){
   /* One merged, actionable list instead of four small name-only lists: every
      member who is low-on or out-of classes in either category, one row per
      (member, category) they need attention in, sorted worst-first so the
-     people who need a renewal call most urgently are at the top. */
+     people who need a renewal call most urgently are at the top.
+     Inactive members are left out: nobody needs to chase them for a renewal. */
   const rows = [];
+  const activeMembers = data.members.filter(isActiveMember);
   CLASS_CATEGORIES.forEach(cat => {
-    data.members.forEach(m => {
+    activeMembers.forEach(m => {
       const st = memberStatus(m.id, cat);
       if(st.cls === 'warn' || st.cls === 'danger'){
         const lastAttended = memberAttendance(m.id).find(a => attendanceCategory(a) === cat && isPresentRecord(a))?.date;
